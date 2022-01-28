@@ -1,5 +1,5 @@
-from sympy import Symbol, Eq, Abs
-from sympy.logic.boolalg import Or
+from sympy import Symbol, Eq, Ge, Abs
+
 from modulus.solver import Solver
 from modulus.dataset import TrainDomain, ValidationDomain
 from modulus.data import Validation
@@ -19,17 +19,17 @@ width = 0.58
 rec = Rectangle((-width / 2, -height / 2), (width / 2, height / 2))
 # rec.rotate(4 * (np.pi / 180))
 obstacle = Line((0, -height / 4), (0, height / 4), 1)
-# I rotate the line by 90 degrees to make it horizontal.
+# I rotate the line by 90 degrees to make it horizontal. 
 obstacle.rotate(np.pi / 2)
 geo = rec
 
-plane1 = Line((-3 * width / 8, -height / 2), (-3 * width / 8, height / 2), 1)
-plane2 = Line((-2 * width / 8, -height / 2), (-2 * width / 8, height / 2), 1)
-plane3 = Line((-width / 8, -height / 2), (-width / 8, height / 2), 1)
-plane4 = Line((0, -height / 2), (0, height / 2), 1)
-plane5 = Line((width / 8, -height / 2), (width / 8, height / 2), 1)
-plane6 = Line((2 * width / 8, -height / 2), (2 * width / 8, height / 2), 1)
-plane7 = Line((3 * width / 8, -height / 2), (3 * width / 8, height / 2), 1)
+#plane1 = Line((-3 * width / 8, -height / 2), (-3 * width / 8, height / 2), 1)
+#plane2 = Line((-2 * width / 8, -height / 2), (-2 * width / 8, height / 2), 1)
+#plane3 = Line((-width / 8, -height / 2), (-width / 8, height / 2), 1)
+#plane4 = Line((0, -height / 2), (0, height / 2), 1)
+#plane5 = Line((width / 8, -height / 2), (width / 8, height / 2), 1)
+#plane6 = Line((2 * width / 8, -height / 2), (2 * width / 8, height / 2), 1)
+#plane7 = Line((3 * width / 8, -height / 2), (3 * width / 8, height / 2), 1)
 
 # define sympy varaibles to parametize domain curves
 x, y = Symbol("x"), Symbol("y")
@@ -38,16 +38,6 @@ x, y = Symbol("x"), Symbol("y")
 class LDCTrain(TrainDomain):
     def __init__(self, **config):
         super(LDCTrain, self).__init__()
-
-        # inlet
-        # parabola_sympy = parabola(
-        #     y, inter_1=-height / 2, inter_2=height / 2, height=inlet_vel
-        # )
-        # inletBC = geo.boundary_bc(
-        #     outvar_sympy={"u": parabola_sympy, "v": 0},
-        #     batch_size_per_area=64,
-        #     criteria=Eq(x, -width / 2),
-        # )
 
 #############################################################################################
         # I want to make the inlet velocity to be 10.0 m/s with an incidence angle of 4 degrees at the obstacle.
@@ -65,40 +55,32 @@ class LDCTrain(TrainDomain):
 
         inletBC = geo.boundary_bc(
             outvar_sympy={"u": 9.97564, "v": 0.697564},
-            batch_size_per_area=64,
-            criteria=Or(Eq(x, -width / 2), Eq(y, -height / 2)),
+            batch_size_per_area=1000,
+            criteria=Eq(x, -width / 2),
         )
         self.add(inletBC, name="Inlet")
 
         # outlet
         outletBC = geo.boundary_bc(
-            outvar_sympy={"p": 0, "integral_continuity": 6.2774988},
-            batch_size_per_area=64,
-            criteria=Or(Eq(x, width / 2), Eq(y, height / 2)),
+                outvar_sympy={"p": 0, "integral_continuity": 9.97564*height+0.697564*width},
+            batch_size_per_area=256,
+            criteria=Ge(y/height+x/width, 1/2),
         )
         self.add(outletBC, name="Outlet")
 
-        # topWall
-        # topWall = geo.boundary_bc(
-        #     outvar_sympy={"p": 0, "integral_continuity": 0.1333333},
-        #     batch_size_per_area=256,
-        #     criteria=Eq(y, height / 2),
-        # )
-        # self.add(topWall, name="TopWall")
-
         # bottomWall
-        # bottomWall = geo.boundary_bc(
-        #     outvar_sympy={"u": 9.97564, "v": 0.697564},
-        #     batch_size_per_area=256,
-        #     criteria=Eq(y, -height / 2),
-        # )
-        # self.add(bottomWall, name="BottomWall")
+        bottomWall = geo.boundary_bc(
+            outvar_sympy={"u": 9.97564, "v": 0.697564},
+            batch_size_per_area=1000,
+            criteria=Eq(y, -height / 2),
+        )
+        self.add(bottomWall, name="BottomWall")
 
         # obstacleLine
         obstacleLine = obstacle.boundary_bc(
             outvar_sympy={"u": 0, "v": 0},
             batch_size_per_area=1000,
-            lambda_sympy={"lambda_u": 10, "lambda_v": 10},
+            lambda_sympy={"lambda_u": 100, "lambda_v": 100},
         )
         self.add(obstacleLine, name="obstacleLine")
 
@@ -115,50 +97,63 @@ class LDCTrain(TrainDomain):
         )
         self.add(interior, name="Interior")
 
-        # planes
-        plane1Cont = plane1.boundary_bc(
-            outvar_sympy={"integral_continuity": 6.2774988},
-            batch_size_per_area=256,
-            lambda_sympy={"lambda_integral_continuity": 10},
+        neighbourhood = geo.interior_bc(
+            outvar_sympy={"continuity": 0, "momentum_x": 0, "momentum_y": 0},
+            bounds={x: (-height / 3, height / 3), y: (-height / 8, height / 8)},
+            lambda_sympy={
+                "lambda_continuity": 100,
+                "lambda_momentum_x": geo.sdf,
+                "lambda_momentum_y": geo.sdf,
+            },
+            batch_size_per_area=10000,
         )
-        plane2Cont = plane2.boundary_bc(
-            outvar_sympy={"integral_continuity": 6.2774988},
-            batch_size_per_area=256,
-            lambda_sympy={"lambda_integral_continuity": 10},
-        )
-        plane3Cont = plane3.boundary_bc(
-            outvar_sympy={"integral_continuity": 6.2774988},
-            batch_size_per_area=256,
-            lambda_sympy={"lambda_integral_continuity": 10},
-        )
-        plane4Cont = plane4.boundary_bc(
-            outvar_sympy={"integral_continuity": 6.2774988},
-            batch_size_per_area=256,
-            lambda_sympy={"lambda_integral_continuity": 10},
-        )
-        plane5Cont = plane5.boundary_bc(
-            outvar_sympy={"integral_continuity": 6.2774988},
-            batch_size_per_area=256,
-            lambda_sympy={"lambda_integral_continuity": 10},
-        )
-        plane6Cont = plane6.boundary_bc(
-            outvar_sympy={"integral_continuity": 6.2774988},
-            batch_size_per_area=256,
-            lambda_sympy={"lambda_integral_continuity": 10},
-        )
-        plane7Cont = plane7.boundary_bc(
-            outvar_sympy={"integral_continuity": 6.2774988},
-            batch_size_per_area=256,
-            lambda_sympy={"lambda_integral_continuity": 10},
-        )
+        self.add(neighbourhood, name="Neighbourhood")
 
-        self.add(plane1Cont, name="integralContinuity1")
-        self.add(plane2Cont, name="integralContinuity2")
-        self.add(plane3Cont, name="integralContinuity3")
-        self.add(plane4Cont, name="integralContinuity4")
-        self.add(plane5Cont, name="integralContinuity5")
-        self.add(plane6Cont, name="integralContinuity6")
-        self.add(plane7Cont, name="integralContinuity7")
+
+        # planes
+       # plane1Cont = plane1.boundary_bc(
+       #     outvar_sympy={"integral_continuity": 0.1333333},
+       #     batch_size_per_area=256,
+       #     lambda_sympy={"lambda_integral_continuity": 10},
+       # )
+       # plane2Cont = plane2.boundary_bc(
+       #     outvar_sympy={"integral_continuity": 0.1333333},
+       #     batch_size_per_area=256,
+       #     lambda_sympy={"lambda_integral_continuity": 10},
+       # )
+       # plane3Cont = plane3.boundary_bc(
+       #     outvar_sympy={"integral_continuity": 0.1333333},
+       #     batch_size_per_area=256,
+       #     lambda_sympy={"lambda_integral_continuity": 10},
+       # )
+       # plane4Cont = plane4.boundary_bc(
+       #     outvar_sympy={"integral_continuity": 0.1333333},
+       #     batch_size_per_area=256,
+       #     lambda_sympy={"lambda_integral_continuity": 10},
+       # )
+       # plane5Cont = plane5.boundary_bc(
+       #     outvar_sympy={"integral_continuity": 0.1333333},
+       #     batch_size_per_area=256,
+       #     lambda_sympy={"lambda_integral_continuity": 10},
+       # )
+       # plane6Cont = plane6.boundary_bc(
+       #     outvar_sympy={"integral_continuity": 0.1333333},
+       #     batch_size_per_area=256,
+       #     lambda_sympy={"lambda_integral_continuity": 10},
+       # )
+       # plane7Cont = plane7.boundary_bc(
+       #     outvar_sympy={"integral_continuity": 0.1333333},
+       #     batch_size_per_area=256,
+       #     lambda_sympy={"lambda_integral_continuity": 10},
+       # )
+
+       # self.add(plane1Cont, name="integralContinuity1")
+       # self.add(plane2Cont, name="integralContinuity2")
+       # self.add(plane3Cont, name="integralContinuity3")
+       # self.add(plane4Cont, name="integralContinuity4")
+       # self.add(plane5Cont, name="integralContinuity5")
+       # self.add(plane6Cont, name="integralContinuity6")
+       # self.add(plane7Cont, name="integralContinuity7")
 
 
 # validation data

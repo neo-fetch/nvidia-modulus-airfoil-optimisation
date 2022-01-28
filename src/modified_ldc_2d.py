@@ -1,5 +1,5 @@
 from sympy import Symbol, Eq, Abs
-
+from sympy.logic.boolalg import Or
 from modulus.solver import Solver
 from modulus.dataset import TrainDomain, ValidationDomain
 from modulus.data import Validation
@@ -13,7 +13,7 @@ import numpy as np
 # params for domain
 height = 0.59
 width = 0.58
-inlet_vel = 1.0
+# inlet_vel = 10.0
 
 # define geometry
 rec = Rectangle((-width / 2, -height / 2), (width / 2, height / 2))
@@ -49,12 +49,24 @@ class LDCTrain(TrainDomain):
         #     criteria=Eq(x, -width / 2),
         # )
 
-        # I want to make the inlet velocity to be 1.0 m/s with an incidence angle of 4 degrees at the obstacle.
+#############################################################################################
+        # I want to make the inlet velocity to be 10.0 m/s with an incidence angle of 4 degrees at the obstacle.
         # the inverse tan(v/u) gives me the required angle of incidence.
+        # Drawing the scenario in comments below:
+        #      +---------+
+        #     /|/     \|/|
+        #    //|// --- //|
+        #   ///|/////////|
+        #  ////+---------+
+        #  //////////////
+        #  / ////////////
+        #    / //////////
+        # where / is u + v such that tan-1(v/u) = x degrees(here i kept x as 4).
+
         inletBC = geo.boundary_bc(
-            outvar_sympy={"u": 0.997564, "v": 0.0697564},
+            outvar_sympy={"u": 9.97564, "v": 0.697564},
             batch_size_per_area=64,
-            criteria=Eq(x, -width / 2),
+            criteria=Or(Eq(x, -width / 2), Eq(y, -height / 2)),
         )
         self.add(inletBC, name="Inlet")
 
@@ -62,25 +74,25 @@ class LDCTrain(TrainDomain):
         outletBC = geo.boundary_bc(
             outvar_sympy={"p": 0, "integral_continuity": 0.1333333},
             batch_size_per_area=64,
-            criteria=Eq(x, width / 2),
+            criteria=Or(Eq(x, width / 2), Eq(y, height / 2)),
         )
         self.add(outletBC, name="Outlet")
 
         # topWall
-        topWall = geo.boundary_bc(
-            outvar_sympy={"p": 0, "integral_continuity": 0.1333333},
-            batch_size_per_area=256,
-            criteria=Eq(y, height / 2),
-        )
-        self.add(topWall, name="TopWall")
+        # topWall = geo.boundary_bc(
+        #     outvar_sympy={"p": 0, "integral_continuity": 0.1333333},
+        #     batch_size_per_area=256,
+        #     criteria=Eq(y, height / 2),
+        # )
+        # self.add(topWall, name="TopWall")
 
         # bottomWall
-        bottomWall = geo.boundary_bc(
-            outvar_sympy={"u": 0.997564, "v": 0.0697564},
-            batch_size_per_area=256,
-            criteria=Eq(y, -height / 2),
-        )
-        self.add(bottomWall, name="BottomWall")
+        # bottomWall = geo.boundary_bc(
+        #     outvar_sympy={"u": 9.97564, "v": 0.697564},
+        #     batch_size_per_area=256,
+        #     criteria=Eq(y, -height / 2),
+        # )
+        # self.add(bottomWall, name="BottomWall")
 
         # obstacleLine
         obstacleLine = obstacle.boundary_bc(

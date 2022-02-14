@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# Author:
+# Mayank Deshpande
+# http://github.com/neo-fetch
+
 input="/examples/ldc/angles"
 i=0
 while IFS= read -r line

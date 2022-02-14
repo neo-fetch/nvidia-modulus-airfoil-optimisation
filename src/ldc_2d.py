@@ -1,4 +1,6 @@
-from sympy import Symbol, Eq, Ge, Abs
+from sympy import Symbol, Eq, Ge, Abs, Function, Number
+from modulus.pdes import PDES
+from modulus.variables import Variables
 import time
 from modulus.solver import Solver
 from modulus.dataset import TrainDomain, ValidationDomain
@@ -17,6 +19,28 @@ def get_angle(theta):
     u = math.sqrt(1/(1+tan**2))
     v = u*tan
     return u*10, v*10
+
+class NavierStokes_2D(PDES):
+    name = 'NavierStokes_2D'
+    def __init__(self, nu, rho=1, dim=3, time=True):
+        # set params
+        self.dim = dim
+        self.time = time
+
+        # coordinates
+        x, y = Symbol('x'), Symbol('y')
+
+        # time
+        t = Symbol('t')
+
+        # make input variables
+        input_variables = {'x': x, 'y': y, 't': t}
+
+        # velocity componets
+        u = Function('u')(*input_variables)
+        v = Function('v')(*input_variables)
+        self.equations = Variables()
+        self.equations['NavierStokes_2D'] = 
 
 
 # params for domain

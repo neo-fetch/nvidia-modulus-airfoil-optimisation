@@ -1,5 +1,5 @@
 from sympy import Symbol, Eq, Ge, Abs
-
+import time
 from modulus.solver import Solver
 from modulus.dataset import TrainDomain, ValidationDomain
 from modulus.data import Validation
@@ -9,6 +9,15 @@ from modulus.csv_utils.csv_rw import csv_to_dict
 from modulus.PDES.navier_stokes import NavierStokes, IntegralContinuity
 from modulus.controller import ModulusController
 import numpy as np
+import math
+import sys
+
+def get_angle(theta):
+    tan = math.tan(theta)
+    u = math.sqrt(1/(1+tan**2))
+    v = u*tan
+    return u*10, v*10
+
 
 # params for domain
 height = 0.59
@@ -33,7 +42,11 @@ geo = rec
 
 # define sympy varaibles to parametize domain curves
 x, y = Symbol("x"), Symbol("y")
-
+u, v = get_angle(10)
+# u = float(sys.argv[1])
+# v = float(sys.argv[2])
+time.sleep(1)
+print(f"u = {u}, v = {v}")
 
 class LDCTrain(TrainDomain):
     def __init__(self, **config):
@@ -54,7 +67,7 @@ class LDCTrain(TrainDomain):
         # where / is u + v such that tan-1(v/u) = x degrees(here i kept x as 4).
 
         inletBC = geo.boundary_bc(
-            outvar_sympy={"u": 9.97564, "v": 0.697564},
+            outvar_sympy={"u": u, "v": v},
             batch_size_per_area=1000,
             criteria=Eq(x, -width / 2),
         )
@@ -62,7 +75,7 @@ class LDCTrain(TrainDomain):
 
         # outlet
         outletBC = geo.boundary_bc(
-                outvar_sympy={"p": 0, "integral_continuity": 9.97564*height+0.697564*width},
+                outvar_sympy={"p": 0, "integral_continuity": u*height+v*width},
             batch_size_per_area=256,
             criteria=Ge(y/height+x/width, 1/2),
         )
@@ -70,7 +83,7 @@ class LDCTrain(TrainDomain):
 
         # bottomWall
         bottomWall = geo.boundary_bc(
-            outvar_sympy={"u": 9.97564, "v": 0.697564},
+            outvar_sympy={"u": u, "v": v},
             batch_size_per_area=1000,
             criteria=Eq(y, -height / 2),
         )

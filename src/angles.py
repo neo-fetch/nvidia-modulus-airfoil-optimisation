@@ -6,7 +6,8 @@ def get_angle(theta):
     tan = math.tan(theta)
     u = math.sqrt(1/(1+tan**2))
     v = u*tan
-    return u, v
+    mag = 10 # magnitude
+    return u*mag, v*mag
 
 if __name__ == '__main__':
 # Getting u and v from theta ranging from -10 to 10 degrees with increments of 0.01 degrees.

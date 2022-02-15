@@ -22,11 +22,7 @@ def get_angle(theta):
 
 class NavierStokes_2D(PDES):
     name = 'NavierStokes_2D'
-    def __init__(self, nu, rho=1, dim=3, time=True):
-        # set params
-        self.dim = dim
-        self.time = time
-
+    def __init__(self):
         # coordinates
         x, y = Symbol('x'), Symbol('y')
 
@@ -225,10 +221,11 @@ class LDCSolver(Solver):
 
     def __init__(self, **config):
         super(LDCSolver, self).__init__(**config)
-        self.equations = (
-            NavierStokes(nu=0.01, rho=1.0, dim=2, time=False).make_node()
-            + IntegralContinuity().make_node()
-        )
+        # self.equations = (
+        #     NavierStokes(nu=0.01, rho=1.0, dim=2, time=False).make_node()
+        #     + IntegralContinuity().make_node()
+        # )
+        self.equations = (NavierStokes_2D().make_node()
         flow_net = self.arch.make_node(
             name="flow_net", inputs=["x", "y"], outputs=["u", "v", "p"]
         )

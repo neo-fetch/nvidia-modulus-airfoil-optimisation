@@ -41,8 +41,8 @@ class NavierStokes_2D(PDES):
         # Here I implement a simpler form of a 2D Navier-Stokes equation in the form of laplacian(u,v) = 0 such that
         # laplacian(u,v).diff(u) = u and laplacian(u,v).diff(v) = v
         # laplacian(u,v).diff(t) = 0
-        self.equations['x_component'] = phi.diff(x)-u
-        self.equations['y_component'] = phi.diff(y)-v
+        self.equations['x_component'] = u-phi.diff(x)
+        self.equations['y_component'] = v-phi.diff(y)
         self.equations['NavierStokes_2D'] = (phi.diff(x)).diff(x) + (phi.diff(y)).diff(y) # grad^2(phi)
 
 
@@ -102,7 +102,7 @@ class LDCTrain(TrainDomain):
 
         # outlet
         outletBC = geo.boundary_bc(
-                outvar_sympy={"p": 0, "integral_continuity": u*height+v*width},
+                outvar_sympy={"integral_continuity": u*height+v*width},
             batch_size_per_area=256,
             criteria=Ge(y/height+x/width, 1/2),
         )
@@ -126,24 +126,24 @@ class LDCTrain(TrainDomain):
 
         # interior
         interior = geo.interior_bc(
-            outvar_sympy={"continuity": 0, "momentum_x": 0, "momentum_y": 0},
+            outvar_sympy={"x_component": 0, "y_component": 0},
             bounds={x: (-width / 2, width / 2), y: (-height / 2, height / 2)},
             lambda_sympy={
                 "lambda_continuity": 10,
-                "lambda_momentum_x": geo.sdf,
-                "lambda_momentum_y": geo.sdf,
+                "lambda_x_component": geo.sdf,
+                "lambda_y_component": geo.sdf,
             },
             batch_size_per_area=10000,
         )
         self.add(interior, name="Interior")
 
         neighbourhood = geo.interior_bc(
-            outvar_sympy={"continuity": 0, "momentum_x": 0, "momentum_y": 0},
+            outvar_sympy={"x_component": 0, "y_component": 0},
             bounds={x: (-height / 3, height / 3), y: (-height / 8, height / 8)},
             lambda_sympy={
                 "lambda_continuity": 100,
-                "lambda_momentum_x": geo.sdf,
-                "lambda_momentum_y": geo.sdf,
+                "lambda_x_component": geo.sdf,
+                "lambda_y_component": geo.sdf,
             },
             batch_size_per_area=10000,
         )
@@ -223,7 +223,7 @@ class LDCSolver(Solver):
     def __init__(self, **config):
         super(LDCSolver, self).__init__(**config)
         self.equations = (
-            NavierStokes_2D().make_node()
+            NavierStokes_2D().make_node() + IntegralContinuity().make_node()
         )
         flow_net = self.arch.make_node(
             name="flow_net", inputs=["x", "y"], outputs=["u", "v", "phi"]

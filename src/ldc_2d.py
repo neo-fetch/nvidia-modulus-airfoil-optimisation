@@ -36,13 +36,14 @@ class NavierStokes_2D(PDES):
         u = Function('u')(*input_variables)
         v = Function('v')(*input_variables)
         phi = Function('phi')(*input_variables)
+        
         self.equations = Variables()
         # Here I implement a simpler form of a 2D Navier-Stokes equation in the form of laplacian(u,v) = 0 such that
         # laplacian(u,v).diff(u) = u and laplacian(u,v).diff(v) = v
         # laplacian(u,v).diff(t) = 0
-        phi.diff(u)=u
-        phi.diff(v)=v
-        self.equations['NavierStokes_2D'] = (phi.diff(u)).diff(u) + (phi.diff(v)).diff(v)
+        self.equations['x_component'] = phi.diff(u)-u
+        self.equations['y_component'] = phi.diff(v)-v
+        self.equations['NavierStokes_2D'] = (phi.diff(u)).diff(u) + (phi.diff(v)).diff(v) # grad^2(phi)
 
 
 # params for domain
@@ -221,13 +222,11 @@ class LDCSolver(Solver):
 
     def __init__(self, **config):
         super(LDCSolver, self).__init__(**config)
-        # self.equations = (
-        #     NavierStokes(nu=0.01, rho=1.0, dim=2, time=False).make_node()
-        #     + IntegralContinuity().make_node()
-        # )
-        self.equations = (NavierStokes_2D().make_node()
+        self.equations = (
+            NavierStokes_2D().make_node()
+        )
         flow_net = self.arch.make_node(
-            name="flow_net", inputs=["x", "y"], outputs=["u", "v", "p"]
+            name="flow_net", inputs=["x", "y"], outputs=["u", "v", "phi"]
         )
         self.nets = [flow_net]
 
@@ -244,4 +243,7 @@ class LDCSolver(Solver):
 
 if __name__ == "__main__":
     ctr = ModulusController(LDCSolver)
+    # ctr._config_parser._parser.add_argument('angle', metavar='A', type=float, nargs='+', help='angle')
+    # vel = ctr._config_parser._parser.parse_args().angle[0]
+    # print(vel)
     ctr.run()

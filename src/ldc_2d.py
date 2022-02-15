@@ -39,8 +39,14 @@ class NavierStokes_2D(PDES):
         # velocity componets
         u = Function('u')(*input_variables)
         v = Function('v')(*input_variables)
+        phi = Function('phi')(*input_variables)
         self.equations = Variables()
-        self.equations['NavierStokes_2D'] = 
+        # Here I implement a simpler form of a 2D Navier-Stokes equation in the form of laplacian(u,v) = 0 such that
+        # laplacian(u,v).diff(u) = u and laplacian(u,v).diff(v) = v
+        # laplacian(u,v).diff(t) = 0
+        phi.diff(u)=u
+        phi.diff(v)=v
+        self.equations['NavierStokes_2D'] = (phi.diff(u)).diff(u) + (phi.diff(v)).diff(v)
 
 
 # params for domain

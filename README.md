@@ -84,11 +84,11 @@ The following are the results of the simulation.
 
 There are primarily two outputs we are concerned with is the velocity components of the results. The X and Y components of the velocity are shown below.
 
-[x_component](https://i.imgur.com/5Hb9Tg8.png)
+![x_component](https://i.imgur.com/5Hb9Tg8.png)
 
 Figure 1: X Component of the velocity
 
-[y_component](https://i.imgur.com/zTqp3FZ.png)
+![y_component](https://i.imgur.com/zTqp3FZ.png)
 
 Figure 2: Y Component of the velocity
 ## Acknowledgements <a name = "acknowledgements"></a>

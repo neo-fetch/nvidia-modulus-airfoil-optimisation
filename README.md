@@ -11,6 +11,8 @@
 ## About <a name = "about"></a>
 
 This project uses the flat plate scenario where a flow incidents the flat plate at an angle. Instead of the traditional Navier stokes provided by the modulus libraries, we use our own implementation of navier stokes.
+
+More on this [here](https://ieeexplore.ieee.org/document/9003058). Please refer to section `III. NUMERICAL MODEL OF FLUID DYNAMICS` of the paper.
 ```
      +---------+
     /|/     \|/|

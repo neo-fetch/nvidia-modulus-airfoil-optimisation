@@ -11,6 +11,17 @@
 ## About <a name = "about"></a>
 
 This project uses the flat plate scenario where a flow incidents the flat plate at an angle. Instead of the traditional Navier stokes provided by the modulus libraries, we use our own implementation of navier stokes.
+```
+     +---------+
+    /|/     \|/|
+   //|// --- //|
+  ///|/////////|
+ ////+---------+
+ //////////////
+ / ////////////
+   / //////////
+where '/', '|' and '\' are u + v such that tan-1(v/u) = x degrees(here i kept x as 4).
+```
 
 ## Getting Started <a name = "getting_started"></a>
 

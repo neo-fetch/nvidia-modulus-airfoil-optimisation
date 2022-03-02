@@ -14,11 +14,13 @@ import numpy as np
 import math
 import sys
 
-def get_angle(theta):
-    tan = math.tan(theta)
-    u = math.sqrt(1/(1+tan**2))
-    v = u*tan
-    return u*10, v*10
+def get_angle(theta, magnitude):
+    # tan = math.tan(theta)
+    # u = math.sqrt(1/(1+tan**2))
+    # v = u*tan
+    # return u*10, v*10
+    # Baka Mitai ^^
+    return math.cos(theta)*magnitude, math.sin(theta)*magnitude
 
 class NavierStokes_2D(PDES):
     name = 'NavierStokes_2D'
@@ -47,33 +49,41 @@ class NavierStokes_2D(PDES):
 
 
 # params for domain
-height = 0.59
-width = 0.58
-# inlet_vel = 10.0
-
+obstacle_length = 0.10
+height = 6*obstacle_length  
+# Honestly, we can set the height to anything as long 
+# as the obstacle is always symmetric to the top and bottom of the domain. But for now, we will set it to a 
+# multiple of the obstacle length.
+width = 6*obstacle_length
 # define geometry
 rec = Rectangle((-width / 2, -height / 2), (width / 2, height / 2))
 # rec.rotate(4 * (np.pi / 180))
-obstacle = Line((0, -height / 4), (0, height / 4), 1)
-# I rotate the line by 90 degrees to make it horizontal. 
+obstacle = Line((0, 0), (0, obstacle_length), 1)
+wake = Line((0, -3*obstacle_length), (0, 0), 1) # Wake to enforce kutta condition
 obstacle.rotate(np.pi / 2)
+wake.rotate(np.pi / 2)
+# I rotate the line by 90 degrees to make it horizontal. 
+# Now, the way this system is set up, the line will be positioned such that it is two units from the left of the rectangle, and 3 units 
+# from its trailing edge. 
+
 geo = rec
 
-#plane1 = Line((-3 * width / 8, -height / 2), (-3 * width / 8, height / 2), 1)
-#plane2 = Line((-2 * width / 8, -height / 2), (-2 * width / 8, height / 2), 1)
-#plane3 = Line((-width / 8, -height / 2), (-width / 8, height / 2), 1)
-#plane4 = Line((0, -height / 2), (0, height / 2), 1)
-#plane5 = Line((width / 8, -height / 2), (width / 8, height / 2), 1)
-#plane6 = Line((2 * width / 8, -height / 2), (2 * width / 8, height / 2), 1)
-#plane7 = Line((3 * width / 8, -height / 2), (3 * width / 8, height / 2), 1)
+# plane1 = Line((-3 * width / 8, -height / 2), (-3 * width / 8, height / 2), 1)
+# plane2 = Line((-2 * width / 8, -height / 2), (-2 * width / 8, height / 2), 1)
+# plane3 = Line((-width / 8, -height / 2), (-width / 8, height / 2), 1)
+# plane4 = Line((0, -height / 2), (0, height / 2), 1)
+# plane5 = Line((width / 8, -height / 2), (width / 8, height / 2), 1)
+# plane6 = Line((2 * width / 8, -height / 2), (2 * width / 8, height / 2), 1)
+# plane7 = Line((3 * width / 8, -height / 2), (3 * width / 8, height / 2), 1)
+# The above integral planes are not necessary, but they help to make the system more stable.
 
 # define sympy varaibles to parametize domain curves
 x, y = Symbol("x"), Symbol("y")
 u, v = get_angle(10)
 # u = float(sys.argv[1])
 # v = float(sys.argv[2])
-time.sleep(1)
 print(f"u = {u}, v = {v}")
+time.sleep(1)
 
 class LDCTrain(TrainDomain):
     def __init__(self, **config):
@@ -102,7 +112,7 @@ class LDCTrain(TrainDomain):
 
         # outlet
         outletBC = geo.boundary_bc(
-                outvar_sympy={"integral_continuity": u*height+v*width},
+            outvar_sympy={"integral_continuity": u*height+v*width, "u": u, "v": v}, # Mimicing the far field conditions
             batch_size_per_area=256,
             criteria=Ge(y/height+x/width, 1/2),
         )
@@ -118,11 +128,21 @@ class LDCTrain(TrainDomain):
 
         # obstacleLine
         obstacleLine = obstacle.boundary_bc(
-            outvar_sympy={"u": 0, "v": 0},
+            outvar_sympy={"u": u, "v": 0},
             batch_size_per_area=1000,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100},
         )
         self.add(obstacleLine, name="obstacleLine")
+
+        # wakeLine
+        # Here we define u = u and v = 0 at the trailing edge of the obstacle(which is at x=0, and v = v at x = right wall).
+        l = lambda x : (x)/(3*obstacle_length)
+        wakeLine = wake.boundary_bc(
+            outvar_sympy={"u": u, "v": v*l(x)},
+            batch_size_per_area=1000,
+            lambda_sympy={"lambda_u": 100, "lambda_v": 100},
+        )
+        self.add(wakeLine, name="wakeLine")
 
         # interior
         interior = geo.interior_bc(

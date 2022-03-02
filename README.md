@@ -31,7 +31,7 @@ Please visit [NVIDIA Modulus](https://developer.nvidia.com/modulus) for more inf
 
 ### Prerequisites
 
-- [NVIDIA Modulus](https://developer.nvidia.com/modulus)
+- [NVIDIA Modulus (Previously known as NVIDIA SimNet)](https://developer.nvidia.com/modulus)
 - [Docker](https://www.docker.com/)
 - [Python](https://www.python.org/)
 - Physics and Math (Fluid dynamics, Computational Fluid Dynamics, and Numerical methods)

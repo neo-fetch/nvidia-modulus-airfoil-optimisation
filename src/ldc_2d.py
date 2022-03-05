@@ -28,21 +28,26 @@ class NavierStokes_2D(PDES):
         # coordinates
         x, y = Symbol('x'), Symbol('y')
 
-        # time
-        t = Symbol('t')
+        # angle of attack
+	    alp = Symbol('alpha')
 
         # make input variables
-        input_variables = {'x': x, 'y': y, 't': t}
+        input_variables = {'x': x, 'y': y, 'alpha': alp}
 
         # velocity componets
         u = Function('u')(*input_variables)
         v = Function('v')(*input_variables)
         phi = Function('phi')(*input_variables)
         
+        # How do we limit the range of alpha such that 10 - abs(alpha) >= 0?
+
+
         self.equations = Variables()
         # Here I implement a simpler form of a 2D Navier-Stokes equation in the form of laplacian(u,v) = 0 such that
         # laplacian(u,v).diff(u) = u and laplacian(u,v).diff(v) = v
         # laplacian(u,v).diff(t) = 0
+        self.equations['x_alpha'] = u - 10*math.cos(alp)
+	    self.equations['y_alpha'] = v - 10*math.sin(alp)
         self.equations['x_component'] = u-phi.diff(x)
         self.equations['y_component'] = v-phi.diff(y)
         self.equations['NavierStokes_2D'] = (phi.diff(x)).diff(x) + (phi.diff(y)).diff(y) # grad^2(phi)
@@ -79,6 +84,9 @@ geo = rec
 
 # define sympy varaibles to parametize domain curves
 x, y = Symbol("x"), Symbol("y")
+alp = Symbol("alpha")
+# limit the range of alpha from -10 to 10 using np.pi.
+alpha_range = {alp, (-np.pi*10/180, np.pi*10/180)}
 u, v = get_angle(10)
 # u = float(sys.argv[1])
 # v = float(sys.argv[2])
@@ -136,7 +144,7 @@ class LDCTrain(TrainDomain):
 
         # wakeLine
         # Here we define u = u and v = 0 at the trailing edge of the obstacle(which is at x=0, and v = v at x = right wall).
-        l = lambda x : (x)/(3*obstacle_length)
+        l = lambda x : (x)/(3*obstacle_length) # x = 0 at the trailing edge of the obstacle
         wakeLine = wake.boundary_bc(
             outvar_sympy={"u": u, "v": v*l(x)},
             batch_size_per_area=1000,

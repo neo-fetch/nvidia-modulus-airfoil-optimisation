@@ -1,4 +1,5 @@
 from sympy import Symbol, Eq, Ge, Abs, Function, Number
+import sympy as sp
 from modulus.pdes import PDES
 from modulus.variables import Variables
 import time
@@ -29,8 +30,8 @@ class NavierStokes_2D(PDES):
         x, y = Symbol('x'), Symbol('y')
 
         # angle of attack
-	    alp = Symbol('alpha')
-
+        alp = Symbol('alpha')
+        
         # make input variables
         input_variables = {'x': x, 'y': y, 'alpha': alp}
 
@@ -46,14 +47,15 @@ class NavierStokes_2D(PDES):
         # Here I implement a simpler form of a 2D Navier-Stokes equation in the form of laplacian(u,v) = 0 such that
         # laplacian(u,v).diff(u) = u and laplacian(u,v).diff(v) = v
         # laplacian(u,v).diff(t) = 0
-        self.equations['x_alpha'] = u - 10*math.cos(alp)
-	    self.equations['y_alpha'] = v - 10*math.sin(alp)
+        self.equations['x_alpha'] = u - 10*sp.cos(alp)
+        self.equations['y_alpha'] = v - 10*sp.sin(alp)
         self.equations['x_component'] = u-phi.diff(x)
         self.equations['y_component'] = v-phi.diff(y)
         self.equations['NavierStokes_2D'] = (phi.diff(x)).diff(x) + (phi.diff(y)).diff(y) # grad^2(phi)
 
 
 # params for domain
+magnitude = 10
 obstacle_length = 0.10
 height = 6*obstacle_length  
 # Honestly, we can set the height to anything as long 
@@ -73,24 +75,15 @@ wake.rotate(np.pi / 2)
 
 geo = rec
 
-# plane1 = Line((-3 * width / 8, -height / 2), (-3 * width / 8, height / 2), 1)
-# plane2 = Line((-2 * width / 8, -height / 2), (-2 * width / 8, height / 2), 1)
-# plane3 = Line((-width / 8, -height / 2), (-width / 8, height / 2), 1)
-# plane4 = Line((0, -height / 2), (0, height / 2), 1)
-# plane5 = Line((width / 8, -height / 2), (width / 8, height / 2), 1)
-# plane6 = Line((2 * width / 8, -height / 2), (2 * width / 8, height / 2), 1)
-# plane7 = Line((3 * width / 8, -height / 2), (3 * width / 8, height / 2), 1)
-# The above integral planes are not necessary, but they help to make the system more stable.
-
 # define sympy varaibles to parametize domain curves
 x, y = Symbol("x"), Symbol("y")
 alp = Symbol("alpha")
 # limit the range of alpha from -10 to 10 using np.pi.
 alpha_range = {alp, (-np.pi*10/180, np.pi*10/180)}
-u, v = get_angle(10)
+# u, v = get_angle(alp, 10)
 # u = float(sys.argv[1])
 # v = float(sys.argv[2])
-print(f"u = {u}, v = {v}")
+print(f"u = {alp}, v = {alp}")
 time.sleep(1)
 
 class LDCTrain(TrainDomain):
@@ -112,31 +105,34 @@ class LDCTrain(TrainDomain):
         # where / is u + v such that tan-1(v/u) = x degrees(here i kept x as 4).
 
         inletBC = geo.boundary_bc(
-            outvar_sympy={"u": u, "v": v},
+            outvar_sympy={"u": sp.cos(alp)*magnitude, "v": sp.sin(alp)*magnitude},
             batch_size_per_area=1000,
             criteria=Eq(x, -width / 2),
+            param_ranges = alpha_range
         )
         self.add(inletBC, name="Inlet")
 
         # outlet
         outletBC = geo.boundary_bc(
-            outvar_sympy={"integral_continuity": u*height+v*width, "u": u, "v": v}, # Mimicing the far field conditions
+            outvar_sympy={"integral_continuity": u*height+v*width, "u": sp.cos(alp)*magnitude, "v": sp.sin(alp)*magnitude}, # Mimicing the far field conditions
             batch_size_per_area=256,
             criteria=Ge(y/height+x/width, 1/2),
+            param_ranges = alpha_range
         )
         self.add(outletBC, name="Outlet")
 
         # bottomWall
         bottomWall = geo.boundary_bc(
-            outvar_sympy={"u": u, "v": v},
+            outvar_sympy={"u": sp.cos(alp)*magnitude, "v": sp.sin(alp)*magnitude},
             batch_size_per_area=1000,
             criteria=Eq(y, -height / 2),
+            param_ranges = alpha_range
         )
         self.add(bottomWall, name="BottomWall")
 
         # obstacleLine
         obstacleLine = obstacle.boundary_bc(
-            outvar_sympy={"u": u, "v": 0},
+            outvar_sympy={"u": sp.cos(alp)*magnitude, "v": 0},
             batch_size_per_area=1000,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100},
         )
@@ -146,9 +142,10 @@ class LDCTrain(TrainDomain):
         # Here we define u = u and v = 0 at the trailing edge of the obstacle(which is at x=0, and v = v at x = right wall).
         l = lambda x : (x)/(3*obstacle_length) # x = 0 at the trailing edge of the obstacle
         wakeLine = wake.boundary_bc(
-            outvar_sympy={"u": u, "v": v*l(x)},
+            outvar_sympy={"u": sp.cos(alp)*magnitude, "v": sp.sin(alp)*magnitude*l(x)},
             batch_size_per_area=1000,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100},
+            param_ranges = alpha_range
         )
         self.add(wakeLine, name="wakeLine")
 
@@ -162,6 +159,7 @@ class LDCTrain(TrainDomain):
                 "lambda_y_component": geo.sdf,
             },
             batch_size_per_area=10000,
+            param_ranges = alpha_range
         )
         self.add(interior, name="Interior")
 
@@ -174,6 +172,7 @@ class LDCTrain(TrainDomain):
                 "lambda_y_component": geo.sdf,
             },
             batch_size_per_area=10000,
+            param_ranges = alpha_range
         )
         self.add(neighbourhood, name="Neighbourhood")
 
@@ -254,7 +253,7 @@ class LDCSolver(Solver):
             NavierStokes_2D().make_node() + IntegralContinuity().make_node()
         )
         flow_net = self.arch.make_node(
-            name="flow_net", inputs=["x", "y"], outputs=["u", "v", "phi"]
+            name="flow_net", inputs=["x", "y", "alpha"], outputs=["u", "v", "phi"]
         )
         self.nets = [flow_net]
 

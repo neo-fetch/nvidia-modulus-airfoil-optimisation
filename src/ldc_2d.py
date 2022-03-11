@@ -46,7 +46,8 @@ class NavierStokes_2D(PDES):
         # Here I implement a simpler form of a 2D Navier-Stokes equation in the form of laplacian(u,v) = 0 such that
         # laplacian(u,v).diff(u) = u and laplacian(u,v).diff(v) = v
         # laplacian(u,v).diff(t) = 0
-        self.equations['components'] = (u+v)-(phi.diff(x) + phi.diff(y))
+        self.equations['x_component'] = u-phi.diff(x) 
+        self.equations['y_component'] = v-phi.diff(y)
         self.equations['NavierStokes_2D'] = (phi.diff(x)).diff(x) + (phi.diff(y)).diff(y) # grad^2(phi)
 
 

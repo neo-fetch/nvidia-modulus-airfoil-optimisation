@@ -174,12 +174,12 @@ class LDCTrain(TrainDomain):
             outvar_sympy={"x_component": 0, "y_component": 0, "NavierStokes_2D": 0},
             bounds={x: (-height / 3, height / 3), y: (-height / 8, height / 8)},
             lambda_sympy={
-                "lambda_continuity": 2000,
+                "lambda_continuity": 100,
                 "lambda_x_component": geo.sdf,
                 "lambda_y_component": geo.sdf,
                 "lambda_NavierStokes_2D": geo.sdf,
             },
-            batch_size_per_area=10000,
+            batch_size_per_area=2000,
             param_ranges ={**fixed_param_range},
             fixed_var=False            
         )

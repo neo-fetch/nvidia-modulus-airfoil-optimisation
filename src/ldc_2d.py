@@ -105,7 +105,7 @@ class LDCTrain(TrainDomain):
         flow_rate = u_x*width + u_y*height
         inletBC = geo.boundary_bc(
             outvar_sympy={"u": u_x, "v": u_y},
-            batch_size_per_area=1000,
+            batch_size_per_area=250,
             criteria=Eq(x, -width / 2),
             param_ranges ={**fixed_param_range},
             fixed_var=False
@@ -115,7 +115,7 @@ class LDCTrain(TrainDomain):
         # outlet
         outletBC = geo.boundary_bc(
             outvar_sympy={"integral_continuity": flow_rate, "u":u_x , "v": u_y}, # Mimicing the far field conditions
-            batch_size_per_area=256,
+            batch_size_per_area=500,
             criteria=Ge(y/height+x/width, 1/2),
             param_ranges ={**fixed_param_range},
             fixed_var=False
@@ -125,7 +125,7 @@ class LDCTrain(TrainDomain):
         # bottomWall
         bottomWall = geo.boundary_bc(
             outvar_sympy={"u": u_x, "v": u_y},
-            batch_size_per_area=1000,
+            batch_size_per_area=250,
             criteria=Eq(y, -height / 2),
             param_ranges ={**fixed_param_range},
             fixed_var=False            
@@ -135,7 +135,7 @@ class LDCTrain(TrainDomain):
         # obstacleLine
         obstacleLine = obstacle.boundary_bc(
             outvar_sympy={"u": u_x, "v": 0},
-            batch_size_per_area=1000,
+            batch_size_per_area=500,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100},
             param_ranges ={**fixed_param_range},
             fixed_var=False            
@@ -147,8 +147,8 @@ class LDCTrain(TrainDomain):
         l = lambda x : (x)/(3*obstacle_length) # x = 0 at the trailing edge of the obstacle
         wakeLine = wake.boundary_bc(
             outvar_sympy={"u": u_x, "v": u_y*l(x)},
-            batch_size_per_area=1000,
-            lambda_sympy={"lambda_u": 100, "lambda_v": 100},
+            batch_size_per_area=500,
+            lambda_sympy={"lambda_u": 100, "lambda_v": 100, },
             param_ranges ={**fixed_param_range},
             fixed_var=False            
         )
@@ -156,26 +156,28 @@ class LDCTrain(TrainDomain):
 
         # interior
         interior = geo.interior_bc(
-            outvar_sympy={"x_component": 0, "y_component": 0},
+            outvar_sympy={"x_component": 0, "y_component": 0, "NavierStokes_2D": 0},
             bounds={x: (-width / 2, width / 2), y: (-height / 2, height / 2)},
             lambda_sympy={
                 "lambda_continuity": 10,
                 "lambda_x_component": geo.sdf,
                 "lambda_y_component": geo.sdf,
+                "lambda_NavierStokes_2D": geo.sdf,
             },
-            batch_size_per_area=10000,
+            batch_size_per_area=2000,
             param_ranges ={**fixed_param_range},
             fixed_var=False            
         )
         self.add(interior, name="Interior")
 
         neighbourhood = geo.interior_bc(
-            outvar_sympy={"x_component": 0, "y_component": 0},
+            outvar_sympy={"x_component": 0, "y_component": 0, "NavierStokes_2D": 0},
             bounds={x: (-height / 3, height / 3), y: (-height / 8, height / 8)},
             lambda_sympy={
-                "lambda_continuity": 100,
+                "lambda_continuity": 2000,
                 "lambda_x_component": geo.sdf,
                 "lambda_y_component": geo.sdf,
+                "lambda_NavierStokes_2D": geo.sdf,
             },
             batch_size_per_area=10000,
             param_ranges ={**fixed_param_range},
@@ -221,6 +223,8 @@ class LDCSolver(Solver):
                 "network_dir": "./network_checkpoint_ldc_2d",
                 "decay_steps": 4000,
                 "max_steps": 400000,
+                "layer_size": 100,
+                "nr_layer": 2,
             }
         )
 

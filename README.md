@@ -73,7 +73,7 @@ git clone https://www.github.com/neo-fetch/modulus_stuff.git; cd modulus_stuff
 - Run the python script
 
 ```
-python src/ldc_2D.py
+python src/ldc_2D.py --layer_size 100 --nr_layers 2
 ```
 
 ### Running multiple angles

@@ -18,6 +18,5 @@ do
         # backup files
         echo "Copying checkpoint at ${steps}..."
         cp -r "~/simnet/examples/ldc/network_checkpoint_ldc_2d/train_domain/" "~/simnet/results/train_domain_${steps}"
-        i=$((i+1))
     fi
 done

@@ -20,45 +20,37 @@ obstacle = Line((0, -height/4), (0, height/4), 1)
 obstacle.rotate(1.05)
 geo = rec
 
-plane1 = Line((-3*width/8, -height/2),
-(-3*width/8, height/2), 1)
-plane2 = Line((-2*width/8, -height/2),
-(-2*width/8, height/2), 1)
-plane3 = Line((-width/8, -height/2),
-(-width/8, height/2), 1)
-plane4 = Line((0, -height/2),
-(0, height/2), 1)
-plane5 = Line((width/8, -height/2),
-(width/8, height/2), 1)
-plane6 = Line((2*width/8, -height/2),
-(2*width/8, height/2), 1)
-plane7 = Line((3*width/8, -height/2),
-(3*width/8, height/2), 1)
-
 # define sympy varaibles to parametize domain curves
-x, y = Symbol('x'), Symbol('y')
+x, y, alpha = Symbol('x'), Symbol('y'), Symbol('alpha')
+param_ranges = {alpha: (-0.1744, 0.1744)}
+fixed_param_range = {alpha: lambda batch_size: np.full((batch_size, 1), np.random.uniform(-0.1744, 0.1744))}
 
 class LDCTrain(TrainDomain):
   def __init__(self, **config):
     super(LDCTrain, self).__init__()
 
     #inlet
-    parabola_sympy = parabola(y, inter_1=-height/2, inter_2=height/2, height=inlet_vel)
-    inletBC = geo.boundary_bc(outvar_sympy={'u': parabola_sympy, 'v': 0},
+    u_x = 10*cos(alpha)
+    flow_rate = u_x*width
+    inletBC = geo.boundary_bc(outvar_sympy={'u': u_x, 'v': 0},
                               batch_size_per_area=64,
-                              criteria=Eq(x, -width/2))
+                              criteria=Eq(x, -width/2),
+                              param_ranges={**fixed_param_range},
+                              fxied_var=False)
     self.add(inletBC, name="Inlet")
 
     #outlet
-    outletBC = geo.boundary_bc(outvar_sympy={'p': 0, 'integral_continuity':0.1333333},
+    outletBC = geo.boundary_bc(outvar_sympy={'p': 0, 'integral_continuity': 1},
                                batch_size_per_area=64,
-                               criteria=Eq(x, width/2))
+                               criteria=Eq(x, width/2),
+                               param_ranges=param_ranges)
     self.add(outletBC, name="Outlet")
 
     #topWall
     topWall = geo.boundary_bc(outvar_sympy={'u': 0, 'v': 0},
                               batch_size_per_area=256,
-                              criteria=Eq(y, height/2))
+                              criteria=Eq(y, height/2),
+                              param_ranges=param_ranges)
     self.add(topWall, name="TopWall")
 
     #bottomWall
@@ -70,7 +62,8 @@ class LDCTrain(TrainDomain):
     #obstacleLine
     obstacleLine = obstacle.boundary_bc(outvar_sympy = {'u': 0, 'v': 0},
                                    batch_size_per_area=1000,
-                                   lambda_sympy={'lambda_u':10, 'lambda_v':10})
+                                   lambda_sympy={'lambda_u':10, 'lambda_v':10},
+                                   param_ranges=param_ranges)
     self.add(obstacleLine, name="obstacleLine")
 
     # interior
@@ -80,40 +73,11 @@ class LDCTrain(TrainDomain):
                                lambda_sympy={'lambda_continuity': 10,
                                              'lambda_momentum_x': geo.sdf,
                                              'lambda_momentum_y': geo.sdf},
-                               batch_size_per_area=10000)
+                               batch_size_per_area=10000,
+                               param_ranges=param_ranges)
     self.add(interior, name="Interior")
 
     #planes
-    plane1Cont = plane1.boundary_bc(outvar_sympy={'integral_continuity':0.1333333},
-                                    batch_size_per_area=256,
-                                    lambda_sympy={'lambda_integral_continuity':10})
-    plane2Cont = plane2.boundary_bc(outvar_sympy={'integral_continuity':0.1333333},
-                                    batch_size_per_area=256,
-                                    lambda_sympy={'lambda_integral_continuity':10})
-    plane3Cont = plane3.boundary_bc(outvar_sympy={'integral_continuity':0.1333333},
-                                    batch_size_per_area=256,
-                                    lambda_sympy={'lambda_integral_continuity':10})
-    plane4Cont = plane4.boundary_bc(outvar_sympy={'integral_continuity':0.1333333},
-                                    batch_size_per_area=256,
-                                    lambda_sympy={'lambda_integral_continuity':10})
-    plane5Cont = plane5.boundary_bc(outvar_sympy={'integral_continuity':0.1333333},
-                                    batch_size_per_area=256,
-                                    lambda_sympy={'lambda_integral_continuity':10})
-    plane6Cont = plane6.boundary_bc(outvar_sympy={'integral_continuity':0.1333333},
-                                    batch_size_per_area=256,
-                                    lambda_sympy={'lambda_integral_continuity':10})
-    plane7Cont = plane7.boundary_bc(outvar_sympy={'integral_continuity':0.1333333},
-                                    batch_size_per_area=256,
-                                    lambda_sympy={'lambda_integral_continuity':10})
-
-
-    self.add(plane1Cont, name="integralContinuity1")
-    self.add(plane2Cont, name="integralContinuity2")
-    self.add(plane3Cont, name="integralContinuity3")
-    self.add(plane4Cont, name="integralContinuity4")
-    self.add(plane5Cont, name="integralContinuity5")
-    self.add(plane6Cont, name="integralContinuity6")
-    self.add(plane7Cont, name="integralContinuity7")
 
 # validation data
 mapping = {'Points:0': 'x', 'Points:1': 'y', 'U:0': 'u', 'U:1': 'v', 'p': 'p'}
@@ -138,7 +102,7 @@ class LDCSolver(Solver):
     self.equations = (NavierStokes(nu=0.01, rho=1.0, dim=2,time=False).make_node()
                       +IntegralContinuity().make_node())
     flow_net = self.arch.make_node(name='flow_net',
-                                   inputs=['x', 'y'],
+                                   inputs=['x', 'y', 'alpha'],
                                    outputs=['u', 'v', 'p'])
     self.nets = [flow_net]
 

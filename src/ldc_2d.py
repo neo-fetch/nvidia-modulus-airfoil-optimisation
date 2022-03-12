@@ -10,6 +10,7 @@ from modulus.sympy_utils.geometry_2d import Rectangle, Line
 from modulus.csv_utils.csv_rw import csv_to_dict
 from modulus.PDES.navier_stokes import NavierStokes, IntegralContinuity
 from modulus.controller import ModulusController
+from modulus.architecture import FullyConnectedArch
 import numpy as np
 import math
 import sys
@@ -205,6 +206,7 @@ class LDCVal(ValidationDomain):
 class LDCSolver(Solver):
     train_domain = LDCTrain
     val_domain = LDCVal
+    arch = FullyConnectedArch
 
     def __init__(self, **config):
         super(LDCSolver, self).__init__(**config)
@@ -223,8 +225,6 @@ class LDCSolver(Solver):
                 "network_dir": "./network_checkpoint_ldc_2d",
                 "decay_steps": 4000,
                 "max_steps": 400000,
-                "layer_size": 100,
-                "nr_layer": 2,
             }
         )
 

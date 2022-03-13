@@ -3,12 +3,9 @@ from modulus.pdes import PDES
 from modulus.variables import Variables
 import time
 from modulus.solver import Solver
-from modulus.dataset import TrainDomain, ValidationDomain
-from modulus.data import Validation
-from modulus.sympy_utils.functions import parabola
+from modulus.dataset import TrainDomain, InferenceDomain
+from modulus.data import Inference
 from modulus.sympy_utils.geometry_2d import Rectangle, Line
-from modulus.csv_utils.csv_rw import csv_to_dict
-from modulus.PDES.navier_stokes import NavierStokes, IntegralContinuity
 from modulus.controller import ModulusController
 import numpy as np
 import math
@@ -163,18 +160,19 @@ class PotentialTrain(TrainDomain):
         )
         self.add(neighbourhood, name="Neighbourhood")
 
-class PotentialInference(InferenceDomain)；
+class PotentialInference(InferenceDomain):
     def __init__(self, **config):
         super(PotentialInference, self).__init__()
-        interior = Inference(geo.sample_interior(1e6, bounds={x: (-width / 2, width / 2), y: (-height / 2, height / 2)}, ['u','v','phi'])
+        x, y, alpha = Symbol('x'), Symbol('y'), Symbol('alpha')
+        interior = Inference(geo.sample_interior(10000, bounds={x: (-width / 2, width / 2), y: (-height / 2, height / 2)}, param_ranges={alpha: 1.0}), ['phi'])
         self.add(interior, name="Inference")
 
 class PotentialSolver(Solver):
     train_domain = PotentialTrain
-    inference_domain=PotentialInference
+    inference_domain = PotentialInference
 
     def __init__(self, **config):
-        super(LDCSolver, self).__init__(**config)
+        super(PotentialSolver, self).__init__(**config)
         self.equations = (
             Poisson_2D().make_node()
         )
@@ -191,7 +189,6 @@ class PotentialSolver(Solver):
                 "decay_steps": 4000,
                 "max_steps": 400000,
                 "layer_size": 100,
-                "nr_layer": 2,
             }
         )
 

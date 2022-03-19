@@ -3,28 +3,19 @@ from modulus.pdes import PDES
 from modulus.variables import Variables
 import time
 from modulus.solver import Solver
-from modulus.dataset import TrainDomain, ValidationDomain
-from modulus.data import Validation
-from modulus.sympy_utils.functions import parabola
+from modulus.dataset import TrainDomain, InferenceDomain
+from modulus.data import Inference
 from modulus.sympy_utils.geometry_2d import Rectangle, Line
-from modulus.csv_utils.csv_rw import csv_to_dict
-from modulus.PDES.navier_stokes import NavierStokes, IntegralContinuity
 from modulus.controller import ModulusController
-from modulus.architecture import FullyConnectedArch
 import numpy as np
 import math
 import sys
 
 def get_angle(theta, magnitude):
-    # tan = math.tan(theta)
-    # u = math.sqrt(1/(1+tan**2))
-    # v = u*tan
-    # return u*10, v*10
-    # Baka Mitai ^^
     return math.cos(theta)*magnitude, math.sin(theta)*magnitude
 
-class NavierStokes_2D(PDES):
-    name = 'NavierStokes_2D'
+class Poisson_2D(PDES):
+    name = 'Poisson_2D'
     def __init__(self):
         # coordinates
         x, y = Symbol('x'), Symbol('y')
@@ -35,37 +26,51 @@ class NavierStokes_2D(PDES):
         # make input variables
         input_variables = {'x': x, 'y': y, 'alpha': alpha}
 
-        # velocity componets
+        obstacle_length = 0.10
+        # potential
+        phi = Function('phi')(*input_variables)
         u = Function('u')(*input_variables)
         v = Function('v')(*input_variables)
-        phi = Function('phi')(*input_variables)
         
-        # How do we limit the range of alpha such that 10 - abs(alpha) >= 0?
-
-
         self.equations = Variables()
         # Here I implement a simpler form of a 2D Navier-Stokes equation in the form of laplacian(u,v) = 0 such that
         # laplacian(u,v).diff(u) = u and laplacian(u,v).diff(v) = v
         # laplacian(u,v).diff(t) = 0
-        self.equations['x_component'] = u-phi.diff(x) 
-        self.equations['y_component'] = v-phi.diff(y)
-        self.equations['NavierStokes_2D'] = (phi.diff(x)).diff(x) + (phi.diff(y)).diff(y) # grad^2(phi)
+        # self.equations['u'] = phi.diff(x) 
+        # self.equations['v'] = phi.diff(y) # redefined below to facilitate tensorboard graphs.
+        self.equations['residual_u'] = u - phi.diff(x)
+        self.equations['residual_v'] = v - phi.diff(y)
+        # For the far field conditions, we need to define the boundary conditions for the velocity components
+        self.equations['residual_u_comp'] = u - 10*cos(alpha)
+        self.equations['residual_v_comp'] = v - 10*sin(alpha)
+        # For the obstacle inside geometry, v = 0 because v = V(perturbation) + V(far field)) is 0 
+        self.equations['residual_obstacle'] = v
+        # We divide the wake into three parts: the first part after the trailing edge, then the second and then finally, the third part.
+        # This is done to observe how the error manifests in each of the three parts.
+        self.equations['residual_obstacle_wake1'] = v # - 10*sin(alpha)*(x)/(3*obstacle_length)
+        self.equations['residual_obstacle_wake2'] = v # - 10*sin(alpha)*(x)/(3*obstacle_length)
+        self.equations['residual_obstacle_wake3'] = v # - 10*sin(alpha)*(x)/(3*obstacle_length)
+        # The Laplacian we are going to solve is:
+        self.equations['Poisson_2D'] = (phi.diff(x)).diff(x) + (phi.diff(y)).diff(y) # grad^2(phi)
 
 
 # params for domain
 obstacle_length = 0.10
 height = 6*obstacle_length  
-# Honestly, we can set the height to anything as long 
-# as the obstacle is always symmetric to the top and bottom of the domain. But for now, we will set it to a 
-# multiple of the obstacle length.
 width = 6*obstacle_length
+
 # define geometry
 rec = Rectangle((-width / 2, -height / 2), (width / 2, height / 2))
-# rec.rotate(4 * (np.pi / 180))
 obstacle = Line((0, 0), (0, obstacle_length), 1)
-wake = Line((0, -3*obstacle_length), (0, 0), 1) # Wake to enforce kutta condition
+wake1 = Line((0, -1*obstacle_length), (0, 0), 1) # Wake to enforce kutta condition
+wake2 = Line((0, -2*obstacle_length), (0, -1*obstacle_length), 1) # Wake to enforce kutta condition
+wake3 = Line((0, -3*obstacle_length), (0, -2*obstacle_length), 1) # Wake to enforce kutta condition
+
 obstacle.rotate(np.pi / 2)
-wake.rotate(np.pi / 2)
+wake1.rotate(np.pi / 2)
+wake2.rotate(np.pi / 2)
+wake3.rotate(np.pi / 2)
+
 # I rotate the line by 90 degrees to make it horizontal. 
 # Now, the way this system is set up, the line will be positioned such that it is two units from the left of the rectangle, and 3 units 
 # from its trailing edge. 
@@ -78,15 +83,9 @@ x, y, alpha = Symbol('x'), Symbol('y'), Symbol('alpha')
 param_ranges = {alpha, (-np.pi*10/180, np.pi*10/180)}
 fixed_param_range = {alpha: lambda batch_size: np.full((batch_size, 1), np.random.uniform(-np.pi*10/180, np.pi*10/180))}
 
-# u, v =  get_angle(np.pi*10/180, 10)
-# u = float(sys.argv[1])
-# v = float(sys.argv[2])
-# print(f"u = {u}, v = {v}")
-# time.sleep(1)
-
-class LDCTrain(TrainDomain):
+class PotentialTrain(TrainDomain):
     def __init__(self, **config):
-        super(LDCTrain, self).__init__()
+        super(PotentialTrain, self).__init__()
 
 #############################################################################################
         # I want to make the inlet velocity to be 10.0 m/s with an incidence angle of 4 degrees at the obstacle.
@@ -104,9 +103,11 @@ class LDCTrain(TrainDomain):
         u_x = 10*cos(alpha)
         u_y = 10*sin(alpha)
         flow_rate = u_x*width + u_y*height
+
+        # inlet
         inletBC = geo.boundary_bc(
-            outvar_sympy={"u": u_x, "v": u_y},
-            batch_size_per_area=250,
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y, 
+            batch_size_per_area=250*2,
             criteria=Eq(x, -width / 2),
             param_ranges ={**fixed_param_range},
             fixed_var=False
@@ -115,8 +116,8 @@ class LDCTrain(TrainDomain):
 
         # outlet
         outletBC = geo.boundary_bc(
-            outvar_sympy={"integral_continuity": flow_rate, "u":u_x , "v": u_y}, # Mimicing the far field conditions
-            batch_size_per_area=500,
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # Mimicing the far field conditions "u":u_x , "v": u_y, 
+            batch_size_per_area=500*2,
             criteria=Ge(y/height+x/width, 1/2),
             param_ranges ={**fixed_param_range},
             fixed_var=False
@@ -125,8 +126,8 @@ class LDCTrain(TrainDomain):
 
         # bottomWall
         bottomWall = geo.boundary_bc(
-            outvar_sympy={"u": u_x, "v": u_y},
-            batch_size_per_area=250,
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y
+            batch_size_per_area=250*2,
             criteria=Eq(y, -height / 2),
             param_ranges ={**fixed_param_range},
             fixed_var=False            
@@ -135,103 +136,108 @@ class LDCTrain(TrainDomain):
 
         # obstacleLine
         obstacleLine = obstacle.boundary_bc(
-            outvar_sympy={"u": u_x, "v": 0},
-            batch_size_per_area=500,
-            lambda_sympy={"lambda_u": 100, "lambda_v": 100},
+            outvar_sympy={"u": u_x, 'residual_obstacle': 0},
+            batch_size_per_area=600*2,
+            lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle": geo.sdf},
             param_ranges ={**fixed_param_range},
             fixed_var=False            
         )
         self.add(obstacleLine, name="obstacleLine")
 
         # wakeLine
-        # Here we define u = u and v = 0 at the trailing edge of the obstacle(which is at x=0, and v = v at x = right wall).
+        # Here we define u = u and v = 0 at the trailing edge of the obstacle(which is at x=0, and v = v at x = right wall). As a linear function for simplicity.
+        # As the trailing edge is positioned at {0, 0}, we see the 
         l = lambda x : (x)/(3*obstacle_length) # x = 0 at the trailing edge of the obstacle
-        wakeLine = wake.boundary_bc(
-            outvar_sympy={"u": u_x, "v": u_y*l(x)},
-            batch_size_per_area=500,
-            lambda_sympy={"lambda_u": 100, "lambda_v": 100, },
+        wakeLine1 = wake1.boundary_bc(
+            outvar_sympy={"u": u_x, "v": u_y*l(x), 'residual_obstacle_wake1': 0},
+            batch_size_per_area=150*2,
+            lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_wake1": geo.sdf},
             param_ranges ={**fixed_param_range},
             fixed_var=False            
         )
-        self.add(wakeLine, name="wakeLine")
+        self.add(wakeLine1, name="wakeLine1")
+
+        wakeLine2 = wake2.boundary_bc(
+            outvar_sympy={"u": u_x, "v": u_y*l(x), 'residual_obstacle_wake2': 0},
+            batch_size_per_area=150*2,
+            lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_wake2": geo.sdf},
+            param_ranges ={**fixed_param_range},
+            fixed_var=False
+        )
+        self.add(wakeLine2, name="wakeLine2")
+
+        wakeLine3 = wake3.boundary_bc(
+            outvar_sympy={"u": u_x, "v": u_y*l(x), 'residual_obstacle_wake3': 0},
+            batch_size_per_area=150*2,
+            lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_wake3": geo.sdf},
+            param_ranges ={**fixed_param_range},
+            fixed_var=False
+        )
+
+        self.add(wakeLine3, name="wakeLine3")
 
         # interior
         interior = geo.interior_bc(
-            outvar_sympy={"x_component": 0, "y_component": 0, "NavierStokes_2D": 0},
+            outvar_sympy={"Poisson_2D": 0, "residual_u": 0, "residual_v": 0},
             bounds={x: (-width / 2, width / 2), y: (-height / 2, height / 2)},
             lambda_sympy={
-                "lambda_continuity": 10,
-                "lambda_x_component": geo.sdf,
-                "lambda_y_component": geo.sdf,
-                "lambda_NavierStokes_2D": geo.sdf,
+                "lambda_Poisson_2D": geo.sdf,
+                "lambda_residual_u": geo.sdf,
+                "lambda_residual_v": geo.sdf,
             },
-            batch_size_per_area=2000,
+            batch_size_per_area=2000*2,
             param_ranges ={**fixed_param_range},
             fixed_var=False            
         )
         self.add(interior, name="Interior")
 
         neighbourhood = geo.interior_bc(
-            outvar_sympy={"x_component": 0, "y_component": 0, "NavierStokes_2D": 0},
+            outvar_sympy={"Poisson_2D": 0, "residual_u": 0, "residual_v": 0},
             bounds={x: (-height / 3, height / 3), y: (-height / 8, height / 8)},
             lambda_sympy={
-                "lambda_continuity": 100,
-                "lambda_x_component": geo.sdf,
-                "lambda_y_component": geo.sdf,
-                "lambda_NavierStokes_2D": geo.sdf,
+                "lambda_Poisson_2D": geo.sdf,
+                "lambda_residual_u": geo.sdf,
+                "lambda_residual_v": geo.sdf,
             },
-            batch_size_per_area=2000,
+            batch_size_per_area=2000*2,
             param_ranges ={**fixed_param_range},
             fixed_var=False            
         )
         self.add(neighbourhood, name="Neighbourhood")
 
-
-# validation data
-# validation data
-mapping = {'Points:0': 'x', 'Points:1': 'y', 'Points:2': 'alpha','U:0': 'u', 'U:1': 'v', 'p': 'p'}
-openfoam_var = csv_to_dict('openfoam/cavity_uniformVel0.csv', mapping)
-openfoam_var['x'] += -width / 2  # center OpenFoam data
-openfoam_var['y'] += -height / 2  # center OpenFoam data
-openfoam_invar_numpy = {key: value for key, value in openfoam_var.items() if key in ['x', 'y', 'alpha']}
-openfoam_outvar_numpy = {key: value for key, value in openfoam_var.items() if key in ['u', 'v']}
-
-class LDCVal(ValidationDomain):
+class PotentialInference(InferenceDomain):
     def __init__(self, **config):
-        super(LDCVal, self).__init__()
-        val = Validation.from_numpy(openfoam_invar_numpy, openfoam_outvar_numpy)
-        self.add(val, name="Val")
+        super(PotentialInference, self).__init__()
+        x, y, alpha = Symbol('x'), Symbol('y'), Symbol('alpha')
+        interior = Inference(geo.sample_interior(10000, bounds={x: (-width / 2, width / 2), y: (-height / 2, height / 2)}, param_ranges={alpha: np.pi*(10/180)}), ['u', 'v', 'phi'])
+        self.add(interior, name="Inference")
 
-
-class LDCSolver(Solver):
-    train_domain = LDCTrain
-    val_domain = LDCVal
-    arch = FullyConnectedArch
+class PotentialSolver(Solver):
+    train_domain = PotentialTrain
+    inference_domain = PotentialInference
 
     def __init__(self, **config):
-        super(LDCSolver, self).__init__(**config)
+        super(PotentialSolver, self).__init__(**config)
         self.equations = (
-            NavierStokes_2D().make_node() + IntegralContinuity().make_node()
+            Poisson_2D().make_node()
         )
         flow_net = self.arch.make_node(
             name="flow_net", inputs=["x", "y", "alpha"], outputs=["u", "v", "phi"]
         )
         self.nets = [flow_net]
 
+
     @classmethod
     def update_defaults(cls, defaults):
         defaults.update(
             {
-                "network_dir": "./network_checkpoint_ldc_2d",
+                "network_dir": "./network_checkpoint_potential_flow_2d",
                 "decay_steps": 4000,
                 "max_steps": 400000,
+                "layer_size": 100,
             }
         )
 
-
 if __name__ == "__main__":
-    ctr = ModulusController(LDCSolver)
-    # ctr._config_parser._parser.add_argument('angle', metavar='A', type=float, nargs='+', help='angle')
-    # vel = ctr._config_parser._parser.parse_args().angle[0]
-    # print(vel)
+    ctr = ModulusController(PotentialSolver)
     ctr.run()

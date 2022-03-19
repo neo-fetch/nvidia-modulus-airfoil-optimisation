@@ -36,21 +36,22 @@ class Poisson_2D(PDES):
         # Here I implement a simpler form of a 2D Navier-Stokes equation in the form of laplacian(u,v) = 0 such that
         # laplacian(u,v).diff(u) = u and laplacian(u,v).diff(v) = v
         # laplacian(u,v).diff(t) = 0
-        self.equations['u'] = phi.diff(x) 
-        self.equations['v'] = phi.diff(y) 
+        # self.equations['u'] = phi.diff(x) 
+        # self.equations['v'] = phi.diff(y) # redefined below to facilitate tensorboard graphs.
         self.equations['residual_u'] = u - phi.diff(x)
         self.equations['residual_v'] = v - phi.diff(y)
+        # For the far field conditions, we need to define the boundary conditions for the velocity components
         self.equations['residual_u_comp'] = u - 10*cos(alpha)
         self.equations['residual_v_comp'] = v - 10*sin(alpha)
+        # For the obstacle inside geometry, v = 0 because v = V(perturbation) + V(far field)) is 0 
         self.equations['residual_obstacle'] = v
+        # We divide the wake into three parts: the first part after the trailing edge, then the second and then finally, the third part.
+        # This is done to observe how the error manifests in each of the three parts.
         self.equations['residual_obstacle_wake1'] = v # - 10*sin(alpha)*(x)/(3*obstacle_length)
         self.equations['residual_obstacle_wake2'] = v # - 10*sin(alpha)*(x)/(3*obstacle_length)
         self.equations['residual_obstacle_wake3'] = v # - 10*sin(alpha)*(x)/(3*obstacle_length)
+        # The Laplacian we are going to solve is:
         self.equations['Poisson_2D'] = (phi.diff(x)).diff(x) + (phi.diff(y)).diff(y) # grad^2(phi)
-        # Confirm that this is taken over all the points in the cloud
-        # If the above is true, then this equation is being considered as square or alone?
-        # In the above statement the assumption is that the equation is being treated as a residual equation
-        # 
 
 
 # params for domain
@@ -105,7 +106,7 @@ class PotentialTrain(TrainDomain):
 
         # inlet
         inletBC = geo.boundary_bc(
-            outvar_sympy={"u": u_x, "v": u_y, "residual_u_comp": 0, "residual_v_comp": 0},
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y, 
             batch_size_per_area=250*2,
             criteria=Eq(x, -width / 2),
             param_ranges ={**fixed_param_range},
@@ -115,7 +116,7 @@ class PotentialTrain(TrainDomain):
 
         # outlet
         outletBC = geo.boundary_bc(
-            outvar_sympy={"u":u_x , "v": u_y, "residual_u_comp": 0, "residual_v_comp": 0}, # Mimicing the far field conditions
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # Mimicing the far field conditions "u":u_x , "v": u_y, 
             batch_size_per_area=500*2,
             criteria=Ge(y/height+x/width, 1/2),
             param_ranges ={**fixed_param_range},
@@ -125,7 +126,7 @@ class PotentialTrain(TrainDomain):
 
         # bottomWall
         bottomWall = geo.boundary_bc(
-            outvar_sympy={"u": u_x, "v": u_y, "residual_u_comp": 0, "residual_v_comp": 0},
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y
             batch_size_per_area=250*2,
             criteria=Eq(y, -height / 2),
             param_ranges ={**fixed_param_range},
@@ -135,7 +136,7 @@ class PotentialTrain(TrainDomain):
 
         # obstacleLine
         obstacleLine = obstacle.boundary_bc(
-            outvar_sympy={"u": u_x, "v": 0, 'residual_obstacle': 0},
+            outvar_sympy={"u": u_x, 'residual_obstacle': 0},
             batch_size_per_area=600*2,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle": geo.sdf},
             param_ranges ={**fixed_param_range},
@@ -144,7 +145,8 @@ class PotentialTrain(TrainDomain):
         self.add(obstacleLine, name="obstacleLine")
 
         # wakeLine
-        # Here we define u = u and v = 0 at the trailing edge of the obstacle(which is at x=0, and v = v at x = right wall).
+        # Here we define u = u and v = 0 at the trailing edge of the obstacle(which is at x=0, and v = v at x = right wall). As a linear function for simplicity.
+        # As the trailing edge is positioned at {0, 0}, we see the 
         l = lambda x : (x)/(3*obstacle_length) # x = 0 at the trailing edge of the obstacle
         wakeLine1 = wake1.boundary_bc(
             outvar_sympy={"u": u_x, "v": u_y*l(x), 'residual_obstacle_wake1': 0},

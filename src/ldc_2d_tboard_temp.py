@@ -98,8 +98,8 @@ geo = rec
 # define sympy varaibles to parametize domain curves
 x, y, alpha = Symbol('x'), Symbol('y'), Symbol('alpha')
 # limit the range of alpha from -10 to 10 using np.pi.
-param_ranges_above = {alpha: lambda batch_size: np.full((batch_size, 1), np.random.uniform(-np.pi*10/180, np.pi*10/180)), y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(height/2, height))}
-param_ranges_below = {alpha: lambda batch_size: np.full((batch_size, 1), np.random.uniform(-np.pi*10/180, np.pi*10/180)), y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(0, height/2))}
+y_range_above = {y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(height/2.0, height))}
+y_range_below = {y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(0, height/2.0))}
 fixed_param_range = {alpha: lambda batch_size: np.full((batch_size, 1), np.random.uniform(-np.pi*10/180, np.pi*10/180))}
 
 class PotentialTrain(TrainDomain):
@@ -158,7 +158,7 @@ class PotentialTrain(TrainDomain):
             outvar_sympy={"u": u_x, 'residual_obstacle_above': 0},
             batch_size_per_area=600*2,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_above": geo.sdf},
-            param_ranges ={**param_ranges_above},
+            param_ranges ={**y_range_above, **fixed_param_range},
             fixed_var=False            
         )
         self.add(obstacleLineAbove, name="obstacleLineAbove")
@@ -168,7 +168,7 @@ class PotentialTrain(TrainDomain):
             outvar_sympy={"u": u_x, 'residual_obstacle_below': 0},
             batch_size_per_area=600*2,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_below": geo.sdf},
-            param_ranges ={**param_ranges_below},
+            param_ranges ={**y_range_below, **fixed_param_range},
             fixed_var=False
         )
         self.add(obstacleLineBelow, name="obstacleLineBelow")
@@ -181,7 +181,7 @@ class PotentialTrain(TrainDomain):
             outvar_sympy={"u": u_x, "v": u_y*l(x), 'residual_obstacle_wake1_above': 0},
             batch_size_per_area=150*2,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_wake1_above": geo.sdf},
-            param_ranges ={**param_ranges_above},
+            param_ranges ={**y_range_above, **fixed_param_range},
             fixed_var=False            
         )
         self.add(wakeLine1_Above, name="wakeLine1_Above")
@@ -190,7 +190,7 @@ class PotentialTrain(TrainDomain):
             outvar_sympy={"u": u_x, "v": u_y*l(x), 'residual_obstacle_wake2_above': 0},
             batch_size_per_area=150*2,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_wake2_above": geo.sdf},
-            param_ranges ={**param_ranges_above},
+            param_ranges ={**y_range_above, **fixed_param_range},
             fixed_var=False
         )
         self.add(wakeLine2_Above, name="wakeLine2_Above")
@@ -199,7 +199,7 @@ class PotentialTrain(TrainDomain):
             outvar_sympy={"u": u_x, "v": u_y*l(x), 'residual_obstacle_wake3_above': 0},
             batch_size_per_area=150*2,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_wake3_above": geo.sdf},
-            param_ranges ={**param_ranges_above},
+            param_ranges ={**y_range_above, **fixed_param_range},
             fixed_var=False
         )
 
@@ -209,7 +209,7 @@ class PotentialTrain(TrainDomain):
             outvar_sympy={"u": u_x, "v": u_y*l(x), 'residual_obstacle_wake1_below': 0},
             batch_size_per_area=150*2,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_wake1_below": geo.sdf},
-            param_ranges ={**param_ranges_below},
+            param_ranges ={**y_range_below, **fixed_param_range},
             fixed_var=False
         )
         self.add(wakeLine1_Below, name="wakeLine1_Below")
@@ -218,7 +218,7 @@ class PotentialTrain(TrainDomain):
             outvar_sympy={"u": u_x, "v": u_y*l(x), 'residual_obstacle_wake2_below': 0},
             batch_size_per_area=150*2,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_wake2_below": geo.sdf},
-            param_ranges ={**param_ranges_below},
+            param_ranges ={**y_range_below, **fixed_param_range},
             fixed_var=False
         )
         self.add(wakeLine2_Below, name="wakeLine2_Below")
@@ -227,7 +227,7 @@ class PotentialTrain(TrainDomain):
             outvar_sympy={"u": u_x, "v": u_y*l(x), 'residual_obstacle_wake3_below': 0},
             batch_size_per_area=150*2,
             lambda_sympy={"lambda_u": 100, "lambda_v": 100, "lambda_residual_obstacle_wake3_below": geo.sdf},
-            param_ranges ={**param_ranges_below},
+            param_ranges ={**y_range_below, **fixed_param_range},
             fixed_var=False
         )
         self.add(wakeLine3_Below, name="wakeLine3_Below")

@@ -98,9 +98,13 @@ geo = rec
 # define sympy varaibles to parametize domain curves
 x, y, alpha = Symbol('x'), Symbol('y'), Symbol('alpha')
 # limit the range of alpha from -10 to 10 using np.pi.
-y_range_above = {y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(height/2.0, height))}
-y_range_below = {y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(0, height/2.0))}
+y_range_above = {y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(0, height/2.0))}
+y_range_below = {y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(-height/2.0, 0))}
 fixed_param_range = {alpha: lambda batch_size: np.full((batch_size, 1), np.random.uniform(-np.pi*10/180, np.pi*10/180))}
+
+print(f'fixed_param_range: {fixed_param_range[alpha]}')
+print(f'y_range_above: {y_range_above[y]}')
+print(f'y_range_below: {y_range_below[y]}')
 
 class PotentialTrain(TrainDomain):
     def __init__(self, **config):

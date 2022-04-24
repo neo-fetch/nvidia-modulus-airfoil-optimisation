@@ -344,16 +344,19 @@ class PotentialSolver(Solver):
 
         # We now move on to filtering our points to match our criteria for selection of points around the obstacle and wake lines. A diagram below shows us the band of points around the obstacle and wake lines.
 
-        # Drawing a square
         # +-------------------+
         # |                   |
         # |                   |
         # |     +-------------+
+        # |     |/////////////|
         # |     |---==========|
+        # |     |\\\\\\\\\\\\\|
         # |     +-------------+
         # |                   |
         # |                   |
         # +-------------------+
+        
+        # Diagram: Band around obstacle and wake lines
 
         # We need to filter the interior points to only select those that lie within the square. We do this by taking the x and y values of the interior points
         #  and comparing them to the x and y values of the square. If the x and y values are within the square, we add them to the interior points.

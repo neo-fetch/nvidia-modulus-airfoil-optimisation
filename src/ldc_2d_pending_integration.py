@@ -311,6 +311,15 @@ class PotentialSolver(Solver):
             name="flow_net", inputs=["x", "y", "alpha"], outputs=["u", "v", "phi"]
         )
         self.nets = [flow_net]
+    
+    def get_sub_pc(self, point, band, x_range, y_range):
+        x_range = [[point[0] - x_range, -obstacle_length][point[0] - x_range < -obstacle_length], [point[0] + x_range, width/2][point[0] + x_range > width/2]]
+        y_range = sorted([0, point[1] + y_range])
+        sub_pc = []
+        for i in range(len(band)):
+            if x_range[0] <= band[i][0] <= x_range[1] and y_range[0] <= band[i][1] <= y_range[1]:
+                sub_pc.append(band[i])
+        return sub_pc
 
     def custom_loss(self, domain_invar, pred_domain_outvar, true_domain_outvar, step):
         x_interior = domain_invar['interior']['x'] + domain_invar['RightWall']['x']
@@ -374,7 +383,27 @@ class PotentialSolver(Solver):
         band_above = band_above + wkeobs_above
         band_below = band_below + wkeobs_below
 
+        bands = [band_above, band_below]
+        dx = 0.3
+        dy = 0.3 # 
+        for i in range(2):
+            for j in range(len(bands[i])):
+                xfy = [bands[i][j][0] + dx, bands[i][j][1]]
+                xby = [bands[i][j][0] - dx, bands[i][j][1]]
+                xyf = [bands[i][j][0], bands[i][j][1] + (-1)**i*dy]
+                xy = [bands[i][j][0], bands[i][j][1]]
+
+                Nxfy = get_sub_pc(xfy, bands[i], 0.3, (-1)**i*0.6)
+                Nxby = get_sub_pc(xby, bands[i], 0.3, (-1)**i*0.6)
+                Nxy = get_sub_pc(xy, bands[i], 0.3, (-1)**i*0.6)
+                Nxyf = Nxy
+
+                Wxfy = 
+                Wxby = 
+                Wxyf = 
+                Wxy = 
         # Now that we have divided the band into above and below y = 0, we can now start our process of dividing the point cloud into smaller sub point clouds using my good friend sid's subroutine.
+        
         
     @classmethod
     def update_defaults(cls, defaults):

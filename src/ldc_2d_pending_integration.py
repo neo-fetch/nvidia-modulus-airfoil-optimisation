@@ -124,27 +124,47 @@ class PotentialTrain(TrainDomain):
         u_y = 10*sin(alpha)
         flow_rate = u_x*width + u_y*height
 
-        # inlet
-        inletBC = geo.boundary_bc(
+        # Left wall
+        leftWall = geo.boundary_bc(
             outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y, 
             batch_size_per_area=250*2,
             criteria=Eq(x, -width / 2),
             param_ranges ={**fixed_param_range},
             fixed_var=False
         )
-        self.add(inletBC, name="Inlet")
+        self.add(leftWall, name="LeftWall")
 
         # outlet
-        outletBC = geo.boundary_bc(
-            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # Mimicing the far field conditions "u":u_x , "v": u_y, 
-            batch_size_per_area=500*2,
-            criteria=Ge(y/height+x/width, 1/2),
+        # outletBC = geo.boundary_bc(
+        #     outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # Mimicing the far field conditions "u":u_x , "v": u_y, 
+        #     batch_size_per_area=500*2,
+        #     criteria=Ge(y/height+x/width, 1/2),
+        #     param_ranges ={**fixed_param_range},
+        #     fixed_var=False
+        # )
+        # self.add(outletBC, name="Outlet")
+
+        # Top wall
+        topWall = geo.boundary_bc(
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y,
+            batch_size_per_area=250*2,
+            criteria=Eq(y, height / 2),
             param_ranges ={**fixed_param_range},
             fixed_var=False
         )
-        self.add(outletBC, name="Outlet")
+        self.add(topWall, name="TopWall")
 
-        # bottomWall
+        # Right wall
+        rightWall = geo.boundary_bc(
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y,
+            batch_size_per_area=250*2,
+            criteria=Eq(x, width / 2),
+            param_ranges ={**fixed_param_range},
+            fixed_var=False
+        )
+        self.add(rightWall, name="RightWall")
+
+        # Bottom Wall
         bottomWall = geo.boundary_bc(
             outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y
             batch_size_per_area=250*2,
@@ -243,48 +263,19 @@ class PotentialTrain(TrainDomain):
         self.add(wakeLine3_Below, name="wakeLine3_Below")
 
         # interior
-        interiorLeft = geo.interior_bc(
+        interior = geo.interior_bc(
             outvar_sympy={"Poisson_2D": 0, "residual_u": 0, "residual_v": 0},
-            bounds={x: (-width / 2, 0), y: (-height / 2, height / 2)},
+            bounds={x: (-width / 2, width / 2), y: (-height / 2, height / 2)}, 
             lambda_sympy={
                 "lambda_Poisson_2D": geo.sdf,
                 "lambda_residual_u": geo.sdf,
                 "lambda_residual_v": geo.sdf,
             },
-            batch_size_per_area=2000*2,
+            batch_size_per_area=4000*2,
             param_ranges ={**fixed_param_range},
             fixed_var=False            
         )
-        self.add(interiorLeft, name="InteriorLeft")
-
-        interiorAbove = geo.interior_bc(
-            outvar_sympy={"Poisson_2D": 0, "residual_u": 0, "residual_v": 0},
-            bounds={x: (0, width / 2), y: (0, height / 2)},
-            lambda_sympy={
-                "lambda_Poisson_2D": geo.sdf,
-                "lambda_residual_u": geo.sdf,
-                "lambda_residual_v": geo.sdf,
-            },
-            batch_size_per_area=2000*2,
-            param_ranges ={**fixed_param_range},
-            fixed_var=False            
-        )
-        self.add(interiorAbove, name="InteriorAbove")
-
-        interiorBelow = geo.interior_bc(
-            outvar_sympy={"Poisson_2D": 0, "residual_u": 0, "residual_v": 0},
-            bounds={x: (0, width / 2), y: (-height / 2, 0)},
-            lambda_sympy={
-                "lambda_Poisson_2D": geo.sdf,
-                "lambda_residual_u": geo.sdf,
-                "lambda_residual_v": geo.sdf,
-            },
-            batch_size_per_area=2000*2,
-            param_ranges ={**fixed_param_range},
-            fixed_var=False            
-        )
-        self.add(interiorBelow, name="InteriorBelow")
-
+        self.add(interior, name="interior")
 
         # neighbourhood = geo.interior_bc(
         #     outvar_sympy={"Poisson_2D": 0, "residual_u": 0, "residual_v": 0},
@@ -321,7 +312,70 @@ class PotentialSolver(Solver):
         )
         self.nets = [flow_net]
 
+    def custom_loss(self, domain_invar, pred_domain_outvar, true_domain_outvar, step):
+        x_interior = domain_invar['interior']['x'] + domain_invar['RightWall']['x']
+        y_interior = domain_invar['interior']['y'] + domain_invar['RightWall']['y']
 
+        x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + domain_invar['wakeLine1_Above']['x'] + domain_invar['wakeLine2_Above']['x'] + domain_invar['wakeLine3_Above']['x']
+        y_wkeobs_above = domain_invar['obstacleLineAbove']['y'] + domain_invar['wakeLine1_Above']['y'] + domain_invar['wakeLine2_Above']['y'] + domain_invar['wakeLine3_Above']['y']
+
+        x_wkeobs_below = domain_invar['obstacleLineBelow']['x'] + domain_invar['wakeLine1_Below']['x'] + domain_invar['wakeLine2_Below']['x'] + domain_invar['wakeLine3_Below']['x']
+        y_wkeobs_below = domain_invar['obstacleLineBelow']['y'] + domain_invar['wakeLine1_Below']['y'] + domain_invar['wakeLine2_Below']['y'] + domain_invar['wakeLine3_Below']['y']
+
+        # wkeobs_above = np.asarray([x_wkeobs_above, y_wkeobs_above]).T
+        # wkeobs_below = np.asarray([x_wkeobs_below, y_wkeobs_below]).T
+        
+        wkeobs_above = list(zip(x_wkeobs_above, y_wkeobs_above))
+        wkeobs_above = [list(t) for t in wkeobs_above] # convert from tuple to list
+        wkeobs_below = list(zip(x_wkeobs_below, y_wkeobs_below))
+        wkeobs_below = [list(t) for t in wkeobs_below] # convert from tuple to list
+
+        # EXPLANATION FOR CODE ABOVE:
+        # To form the band we need around the obstacle and wake lines, we need to know the x and y values of all the interior points, obstacle lines, wake lines and right wall in the event of cut off. The code above does this by adding the x and y values of all the relevant regions.
+
+        # We now move on to filtering our points to match our criteria for selection of points around the obstacle and wake lines. A diagram below shows us the band of points around the obstacle and wake lines.
+
+        # Drawing a square
+        # +-------------------+
+        # |                   |
+        # |                   |
+        # |     +-------------+
+        # |     |---==========|
+        # |     +-------------+
+        # |                   |
+        # |                   |
+        # +-------------------+
+
+        # We need to filter the interior points to only select those that lie within the square. We do this by taking the x and y values of the interior points
+        #  and comparing them to the x and y values of the square. If the x and y values are within the square, we add them to the interior points.
+
+        band = []
+        band_range_x = [-obstacle_length, width/2]
+        band_range_y = [-0.6, 0.6]
+
+        for i in range(len(x_interior)):
+            if band_range_x[0] <= x_interior[i] <= band_range_x[1] and band_range_y[0] <= y_interior[i] <= band_range_y[1]:
+                band.append([x_interior[i], y_interior[i]])
+
+        # We now have all the points within the band. We need to divide the band into above and below y = 0. We do this by creating two lists, one for above y = 0 and one for below y = 0.
+
+        band_above = []
+        band_below = []
+
+        for i in range(len(band)):
+            if band[i][1] > 0:
+                band_above.append(band[i])
+            else if band[i][1] < 0:
+                band_below.append(band[i])
+        
+        # We dont concern ourselves with the points that are exactly on the y = 0 line as we are going to add obstacle and wake points 
+        # separately in the code below.
+
+        band_above = band_above + wkeobs_above
+        band_below = band_below + wkeobs_below
+
+        # Now that we have divided the band into above and below y = 0, we can now start our process of dividing the point cloud into smaller sub point clouds using my good friend sid's subroutine.
+        
     @classmethod
     def update_defaults(cls, defaults):
         defaults.update(

@@ -10,6 +10,7 @@ from modulus.controller import ModulusController
 import numpy as np
 import math
 import sys
+from kd_tree import kd_Tree # (X, D, N, n, point, Du, U)
 
 def get_angle(theta, magnitude):
     return math.cos(theta)*magnitude, math.sin(theta)*magnitude
@@ -385,10 +386,14 @@ class PotentialSolver(Solver):
 
         band_above = band_above + wkeobs_above
         band_below = band_below + wkeobs_below
+        
+        # Now that we have divided the band into above and below y = 0, we can now start our process of dividing the point cloud into smaller sub point clouds using my good friend sid's subroutine.
 
         bands = [band_above, band_below]
         dx = 0.3
         dy = 0.3 # 
+        weights = []
+        neighbors = []
         for i in range(2):
             for j in range(len(bands[i])):
                 xfy = [bands[i][j][0] + dx, bands[i][j][1]]
@@ -401,13 +406,42 @@ class PotentialSolver(Solver):
                 Nxy = get_sub_pc(xy, bands[i], 0.3, (-1)**i*0.6)
                 Nxyf = Nxy
 
-                Wxfy = 
-                Wxby = 
-                Wxyf = 
-                Wxy = 
-        # Now that we have divided the band into above and below y = 0, we can now start our process of dividing the point cloud into smaller sub point clouds using my good friend sid's subroutine.
+                # def kd_Tree(X, D, N, n, point):
+                Wxfy, neigh_xfy = kd_Tree(Nxfy, 2, len(Nxfy), 7, xfy)
+                Wxby, neigh_xby = kd_Tree(Nxby, 2, len(Nxby), 7, xby)
+                Wxyf, neigh_xyf = kd_Tree(Nxyf, 2, len(Nxyf), 7, xyf)
+                # Wxy, neigh_xy = kd_Tree(Nxy, 2, len(Nxy), 7, xy)
+
+                weights.append([Wxfy, Wxby, Wxyf])
+                neighbors.append([neigh_xfy, neigh_xby, neigh_xyf, xy])
         
+        # In the code above, we need 4 points: two points on the x-axis for central differentiation and one point on the y-axis for backward differentiation. We then use these points to find the sub point cloud around them. Using these sub point clouds we can then calculate the weights and neighbors for each point. The weights and neighbors are calculated using the kdTree function(sid's subroutine). We then store them in the weights and neighbors list, which will be used later. For now each entry in weight and neighbor corresponds to information about 4 points: xfy, xby, xyf, xy. Since we specified the neighbours as 7, we will have 7 dimensional vector for each of theses points, making it a total of 4 times 7 = 28 entries per point (x,y).
         
+        for i in range(len(neighbors[0])):
+            # xfy
+            x_xfy = [x for x,y in neighbors[i][0]]
+            y_xfy = [y for x,y in neighbors[i][0]]
+
+            # xby
+            x_xby = [x for x,y in neighbors[i][1]]
+            y_xby = [y for x,y in neighbors[i][1]]
+
+            # xyf
+            x_xyf = [x for x,y in neighbors[i][2]]
+            y_xyf = [y for x,y in neighbors[i][2]]
+
+            # phi xfy
+            phi_xfy = self.nets[0].evaluate({'x': x_xfy, 'y': y_xfy})['phi']
+
+            # phi xby
+            phi_xby = self.nets[0].evaluate({'x': x_xby, 'y': y_xby})['phi']
+
+            # phi xyf
+            phi_xyf = self.nets[0].evaluate({'x': x_xyf, 'y': y_xyf})['phi']
+
+            # phi xy
+            phi_xy = self.nets[0].evaluate({'x': xy[0], 'y': xy[1]})['phi']
+
     @classmethod
     def update_defaults(cls, defaults):
         defaults.update(
@@ -422,3 +456,32 @@ class PotentialSolver(Solver):
 if __name__ == "__main__":
     ctr = ModulusController(PotentialSolver)
     ctr.run()
+
+    # U_points = open("pointcloud_u_vector.csv")
+    # U = np.loadtxt(U_points, delimiter=",")
+
+    # Du = int(input("Enter the dimensionality of u(phi) function (Du): "))
+    # print("Reading the data from pointcloud_u_vector.csv file ...")
+
+    # #This array is used to store all the interpolated values, if Du >= 2.
+    # interpolated_ux_arr = np.zeros(Du, dtype = float)
+
+    # #Case-1: if u is a scalar.
+    # if(Du==1):
+    #     interpolated_ux = 0
+    #     ux_numer = 0
+    #     ux_denom = 0
+    #     flag_val = 0 #To check whether the interpolation function follows the condition when distance == 0.
+    #     for i in range(0,n):
+    #         if(dist[0][i]==0):
+    #             interpolated_ux = U[ind[0][i]]
+    #             flag_val = 1
+    #             break
+    #         else:
+    #             ux_numer = ux_numer + (weigth_arr[i]*U[ind[0][i]])
+    #             ux_denom = ux_denom + weigth_arr[i]
+        
+    #     if(flag_val==1):
+    #         print("Interpolated u(x) = ", interpolated_ux)
+    #     elif(flag_val==0 and ux_denom!=0):
+    #         print("Interpolated u(x) = ", ux_numer/ux_denom)

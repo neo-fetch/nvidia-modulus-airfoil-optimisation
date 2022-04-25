@@ -10,6 +10,7 @@ from modulus.controller import ModulusController
 import numpy as np
 import math
 import sys
+# Importing siddharth's code
 from kd_tree import kd_Tree # (X, D, N, n, point, Du, U)
 
 def get_angle(theta, magnitude):
@@ -316,6 +317,7 @@ class PotentialSolver(Solver):
     # The following function allows you to interpolate your vector points using
     # the interpolation function as weighted average of the vector points using the weight array
     # which is a function of inverse square of the distance from the neighbor point to the interpolation point.
+    # Credits: Siddarth Agarwal
     def phi_interpolation(phi, n, weigth_arr):
         interpolated_phi_x = 0
         phi_x_numer = 0
@@ -329,8 +331,6 @@ class PotentialSolver(Solver):
             else:
                 phi_x_numer = phi_x_numer + (weigth_arr[i]*phi[i])
                 phi_x_denom = phi_x_denom + weigth_arr[i]
-        return(phi_x_numer/phi_x_denom)
-        
         if(flag_val==1):
             return(interpolated_phi_x)
         elif(flag_val==0 and phi_x_denom!=0):
@@ -341,7 +341,9 @@ class PotentialSolver(Solver):
     def get_sub_pc(self, point, band, x_range, y_range):
         x_range = [[point[0] - x_range*obstacle_length, -obstacle_length][point[0] - x_range*obstacle_length < -obstacle_length], \
             [point[0] + x_range*obstacle_length, width/2][point[0] + x_range*obstacle_length > width/2]]
+
         y_range = sorted([0, point[1] + y_range*obstacle_length])
+        
         sub_pc = []
         for i in range(len(band)):
             if x_range[0] <= band[i][0] <= x_range[1] and y_range[0] <= band[i][1] <= y_range[1]:
@@ -403,7 +405,8 @@ class PotentialSolver(Solver):
             if band_range_x[0] <= x_interior[i] <= band_range_x[1] and band_range_y[0] <= y_interior[i] <= band_range_y[1]:
                 band.append([x_interior[i], y_interior[i]])
 
-        # We now have all the points within the band. We need to divide the band into above and below y = 0. We do this by creating two lists, one for above y = 0 and one for below y = 0.
+        # We now have all the points within the band. We need to divide the band into above and below y = 0. 
+        # We do this by creating two lists, one for above y = 0 and one for below y = 0.
 
         band_above = []
         band_below = []
@@ -504,10 +507,9 @@ class PotentialSolver(Solver):
         x_outside = []
         y_outside = []
         for i in range(len(x_interior)):
-            # check if x_interior[i] is outside the band range
-            if x_interior[i] < band_range_x[0]:
+            # check if x_interior[i], y_interior[i] is outside the band:
+            if x_interior[i] < band_range_x[0] and (y_interior[i] < band_range_y[0] or y_interior[i] > band_range_y[1]):
                 x_outside.append(x_interior[i])
-            if y_interior[i] < band_range_y[0] or y_interior[i] > band_range_y[1]:
                 y_outside.append(y_interior[i])
                 
         # We now use the neural network(self.nets[0]) to evaluate the points that are outside the band.

@@ -332,9 +332,9 @@ class PotentialSolver(Solver):
         return(phi_x_numer/phi_x_denom)
         
         if(flag_val==1):
-            print("Interpolated u(x) = ", interpolated_phi_x)
+            return(interpolated_phi_x)
         elif(flag_val==0 and phi_x_denom!=0):
-            print("Interpolated u(x) = ", phi_x_numer/phi_x_denom)
+            return(phi_x_numer/phi_x_denom)
 
     # The following function generates a sub point cloud using the given point cloud 
     # and the given bounding box around the given point coordinate.

@@ -371,7 +371,8 @@ class PotentialSolver(Solver):
         wkeobs_above = [list(t) for t in wkeobs_above] # convert from tuple to list
         wkeobs_below = list(zip(x_wkeobs_below, y_wkeobs_below))
         wkeobs_below = [list(t) for t in wkeobs_below] # convert from tuple to list
-
+        interior = list(zip(x_interior, y_interior))
+        interior = [list(t) for t in interior] # convert from tuple to list
         # EXPLANATION FOR CODE ABOVE:
         # To form the band we need around the obstacle and wake lines, we need to know 
         # the x and y values of all the interior points, obstacle lines, wake lines and right wall in the event of cut off. 
@@ -425,7 +426,7 @@ class PotentialSolver(Solver):
         
         # Now that we have divided the band into above and below y = 0, we can now start our process of dividing 
         # the point cloud into smaller sub point clouds using my good friend sid's subroutine.
-
+        band_total = band_above + band_below
         bands = [band_above, band_below]
         dx = 0.015*obstacle_length
         dy = 0.015*obstacle_length
@@ -504,13 +505,8 @@ class PotentialSolver(Solver):
 
         # We first find the points that are outside the band.
 
-        x_outside = []
-        y_outside = []
-        for i in range(len(x_interior)):
-            # check if x_interior[i], y_interior[i] is outside the band:
-            if x_interior[i] < band_range_x[0] and (y_interior[i] < band_range_y[0] or y_interior[i] > band_range_y[1]):
-                x_outside.append(x_interior[i])
-                y_outside.append(y_interior[i])
+        x_outside = [x for x,y in interior if x,y not in band_total]
+        y_outside = [y for x,y in interior if x,y not in band_total]
                 
         # We now use the neural network(self.nets[0]) to evaluate the points that are outside the band.
         u_outside = self.nets[0].evaluate({'x': x_outside, 'y': y_outside})['u']

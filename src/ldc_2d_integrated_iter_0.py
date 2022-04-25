@@ -278,7 +278,7 @@ class PotentialTrain(TrainDomain):
         )
         self.add(interior, name="interior")
 
-        # neighbourhood = geo.interior_bc(
+        # neighborhood = geo.interior_bc(
         #     outvar_sympy={"Poisson_2D": 0, "residual_u": 0, "residual_v": 0},
         #     bounds={x: (-height / 3, height / 3), y: (-height / 8, height / 8)},
         #     lambda_sympy={
@@ -290,7 +290,7 @@ class PotentialTrain(TrainDomain):
         #     param_ranges ={**fixed_param_range},
         #     fixed_var=False            
         # )
-        # self.add(neighbourhood, name="Neighbourhood")
+        # self.add(neighborhood, name="neighborhood")
 
 class PotentialInference(InferenceDomain):
     def __init__(self, **config):
@@ -312,10 +312,36 @@ class PotentialSolver(Solver):
             name="flow_net", inputs=["x", "y", "alpha"], outputs=["u", "v", "phi"]
         )
         self.nets = [flow_net]
-    
+
+    # The following function allows you to interpolate your vector points using
+    # the interpolation function as weighted average of the vector points using the weight array
+    # which is a function of inverse square of the distance from the neighbor point to the interpolation point.
+    def phi_interpolation(phi, n, weigth_arr):
+        interpolated_phi_x = 0
+        phi_x_numer = 0
+        phi_x_denom = 0
+        flag_val = 0 #To check whether the interpolation function follows the condition when distance == 0.
+        for i in range(0,n):
+            if(dist[i]==0):
+                interpolated_phi_x = phi[i]
+                flag_val = 1
+                break
+            else:
+                phi_x_numer = phi_x_numer + (weigth_arr[i]*phi[i])
+                phi_x_denom = phi_x_denom + weigth_arr[i]
+        return(phi_x_numer/phi_x_denom)
+        
+        if(flag_val==1):
+            print("Interpolated u(x) = ", interpolated_phi_x)
+        elif(flag_val==0 and phi_x_denom!=0):
+            print("Interpolated u(x) = ", phi_x_numer/phi_x_denom)
+
+    # The following function generates a sub point cloud using the given point cloud 
+    # and the given bounding box around the given point coordinate.
     def get_sub_pc(self, point, band, x_range, y_range):
-        x_range = [[point[0] - x_range, -obstacle_length][point[0] - x_range < -obstacle_length], [point[0] + x_range, width/2][point[0] + x_range > width/2]]
-        y_range = sorted([0, point[1] + y_range])
+        x_range = [[point[0] - x_range*obstacle_length, -obstacle_length][point[0] - x_range*obstacle_length < -obstacle_length], \
+            [point[0] + x_range*obstacle_length, width/2][point[0] + x_range*obstacle_length > width/2]]
+        y_range = sorted([0, point[1] + y_range*obstacle_length])
         sub_pc = []
         for i in range(len(band)):
             if x_range[0] <= band[i][0] <= x_range[1] and y_range[0] <= band[i][1] <= y_range[1]:
@@ -326,11 +352,15 @@ class PotentialSolver(Solver):
         x_interior = domain_invar['interior']['x'] + domain_invar['RightWall']['x']
         y_interior = domain_invar['interior']['y'] + domain_invar['RightWall']['y']
 
-        x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + domain_invar['wakeLine1_Above']['x'] + domain_invar['wakeLine2_Above']['x'] + domain_invar['wakeLine3_Above']['x']
-        y_wkeobs_above = domain_invar['obstacleLineAbove']['y'] + domain_invar['wakeLine1_Above']['y'] + domain_invar['wakeLine2_Above']['y'] + domain_invar['wakeLine3_Above']['y']
+        x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + domain_invar['wakeLine1_Above']['x'] +\
+             domain_invar['wakeLine2_Above']['x'] + domain_invar['wakeLine3_Above']['x']
+        y_wkeobs_above = domain_invar['obstacleLineAbove']['y'] + domain_invar['wakeLine1_Above']['y'] +\
+             domain_invar['wakeLine2_Above']['y'] + domain_invar['wakeLine3_Above']['y']
 
-        x_wkeobs_below = domain_invar['obstacleLineBelow']['x'] + domain_invar['wakeLine1_Below']['x'] + domain_invar['wakeLine2_Below']['x'] + domain_invar['wakeLine3_Below']['x']
-        y_wkeobs_below = domain_invar['obstacleLineBelow']['y'] + domain_invar['wakeLine1_Below']['y'] + domain_invar['wakeLine2_Below']['y'] + domain_invar['wakeLine3_Below']['y']
+        x_wkeobs_below = domain_invar['obstacleLineBelow']['x'] + domain_invar['wakeLine1_Below']['x'] +\
+             domain_invar['wakeLine2_Below']['x'] + domain_invar['wakeLine3_Below']['x']
+        y_wkeobs_below = domain_invar['obstacleLineBelow']['y'] + domain_invar['wakeLine1_Below']['y'] +\
+             domain_invar['wakeLine2_Below']['y'] + domain_invar['wakeLine3_Below']['y']
 
         # wkeobs_above = np.asarray([x_wkeobs_above, y_wkeobs_above]).T
         # wkeobs_below = np.asarray([x_wkeobs_below, y_wkeobs_below]).T
@@ -341,9 +371,12 @@ class PotentialSolver(Solver):
         wkeobs_below = [list(t) for t in wkeobs_below] # convert from tuple to list
 
         # EXPLANATION FOR CODE ABOVE:
-        # To form the band we need around the obstacle and wake lines, we need to know the x and y values of all the interior points, obstacle lines, wake lines and right wall in the event of cut off. The code above does this by adding the x and y values of all the relevant regions.
+        # To form the band we need around the obstacle and wake lines, we need to know 
+        # the x and y values of all the interior points, obstacle lines, wake lines and right wall in the event of cut off. 
+        # The code above does this by adding the x and y values of all the relevant regions.
 
-        # We now move on to filtering our points to match our criteria for selection of points around the obstacle and wake lines. A diagram below shows us the band of points around the obstacle and wake lines.
+        # We now move on to filtering our points to match our criteria for selection of points around the obstacle and wake lines. 
+        # A diagram below shows us the band of points around the obstacle and wake lines.
 
         # +-------------------+
         # |                   |
@@ -364,7 +397,7 @@ class PotentialSolver(Solver):
 
         band = []
         band_range_x = [-obstacle_length, width/2]
-        band_range_y = [-0.6, 0.6]
+        band_range_y = [-0.15, 0.15]
 
         for i in range(len(x_interior)):
             if band_range_x[0] <= x_interior[i] <= band_range_x[1] and band_range_y[0] <= y_interior[i] <= band_range_y[1]:
@@ -387,11 +420,12 @@ class PotentialSolver(Solver):
         band_above = band_above + wkeobs_above
         band_below = band_below + wkeobs_below
         
-        # Now that we have divided the band into above and below y = 0, we can now start our process of dividing the point cloud into smaller sub point clouds using my good friend sid's subroutine.
+        # Now that we have divided the band into above and below y = 0, we can now start our process of dividing 
+        # the point cloud into smaller sub point clouds using my good friend sid's subroutine.
 
         bands = [band_above, band_below]
-        dx = 0.3
-        dy = 0.3 # 
+        dx = 0.015*obstacle_length
+        dy = 0.015*obstacle_length
         weights = []
         neighbors = []
         for i in range(2):
@@ -415,8 +449,16 @@ class PotentialSolver(Solver):
                 weights.append([Wxfy, Wxby, Wxyf])
                 neighbors.append([neigh_xfy, neigh_xby, neigh_xyf, xy])
         
-        # In the code above, we need 4 points: two points on the x-axis for central differentiation and one point on the y-axis for backward differentiation. We then use these points to find the sub point cloud around them. Using these sub point clouds we can then calculate the weights and neighbors for each point. The weights and neighbors are calculated using the kdTree function(sid's subroutine). We then store them in the weights and neighbors list, which will be used later. For now each entry in weight and neighbor corresponds to information about 4 points: xfy, xby, xyf, xy. Since we specified the neighbours as 7, we will have 7 dimensional vector for each of theses points, making it a total of 4 times 7 = 28 entries per point (x,y).
-        
+        # In the code above, we need 4 points: two points on the x-axis for central differentiation and one 
+        # point on the y-axis for backward differentiation. We then use these points to find the sub point cloud around them. 
+        # Using these sub point clouds we can then calculate the weights and neighbors for each point. 
+        # The weights and neighbors are calculated using the kdTree function(sid's subroutine). 
+        # We then store them in the weights and neighbors list, which will be used later. 
+        # For now each entry in weight and neighbor corresponds to information about 4 points: xfy, xby, xyf, xy. 
+        # Since we specified the neighbors as 7, we will have 7 dimensional vector for each of theses points, 
+        # making it a total of 4 times 7 = 28 entries per point (x,y).
+        u_band = []
+        v_band = []
         for i in range(len(neighbors[0])):
             # xfy
             x_xfy = [x for x,y in neighbors[i][0]]
@@ -441,6 +483,37 @@ class PotentialSolver(Solver):
 
             # phi xy
             phi_xy = self.nets[0].evaluate({'x': xy[0], 'y': xy[1]})['phi']
+
+            # Interpolating phi for xfy, xby, xyf
+
+            phi_xfy = phi_interpolation(phi_xfy, len(phi_xfy), weights[i][0])
+
+            phi_xby = phi_interpolation(phi_xby, len(phi_xby), weights[i][1])
+
+            phi_xyf = phi_interpolation(phi_xyf, len(phi_xyf), weights[i][2])
+
+            # Calculating u and v
+            u_band.append([xy[0], xy[1]], [(phi_xfy - phi_xby)/(2*dx)])
+            v_band.append([xy[0], xy[1]], [abs(phi_xyf - phi_xy)/(dy)])
+
+        # We now have the u and v values for each point in the point cloud. We now need to find the u and v values outside the band.
+        # We do this by finding the points that are outside the band and then using the neural network to evaluate them.
+
+        # We first find the points that are outside the band.
+
+        x_outside = []
+        y_outside = []
+        for i in range(len(x_interior)):
+            # check if x_interior[i] is outside the band range
+            if x_interior[i] < band_range_x[0]:
+                x_outside.append(x_interior[i])
+            if y_interior[i] < band_range_y[0] or y_interior[i] > band_range_y[1]:
+                y_outside.append(y_interior[i])
+                
+        # We now use the neural network(self.nets[0]) to evaluate the points that are outside the band.
+        u_outside = self.nets[0].evaluate({'x': x_outside, 'y': y_outside})['u']
+        v_outside = self.nets[0].evaluate({'x': x_outside, 'y': y_outside})['v']
+
 
     @classmethod
     def update_defaults(cls, defaults):
@@ -468,20 +541,3 @@ if __name__ == "__main__":
 
     # #Case-1: if u is a scalar.
     # if(Du==1):
-    #     interpolated_ux = 0
-    #     ux_numer = 0
-    #     ux_denom = 0
-    #     flag_val = 0 #To check whether the interpolation function follows the condition when distance == 0.
-    #     for i in range(0,n):
-    #         if(dist[0][i]==0):
-    #             interpolated_ux = U[ind[0][i]]
-    #             flag_val = 1
-    #             break
-    #         else:
-    #             ux_numer = ux_numer + (weigth_arr[i]*U[ind[0][i]])
-    #             ux_denom = ux_denom + weigth_arr[i]
-        
-    #     if(flag_val==1):
-    #         print("Interpolated u(x) = ", interpolated_ux)
-    #     elif(flag_val==0 and ux_denom!=0):
-    #         print("Interpolated u(x) = ", ux_numer/ux_denom)

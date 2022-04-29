@@ -4,8 +4,7 @@
 - [ ] Evaluate errors  
 - [ ] Fix the code formatting: 
     - [ ] Fix the spacing
-    - [ ] Fix the line length
-- [ ] Call meeting with the team for review and discussing next steps  
+    - [ ] Fix the line length  
 
 ### In Progress
 
@@ -14,3 +13,4 @@
 ### Done ✓
 
 - [x] Integrate Sid's subroutine [KD-tree](https://github.com/neo-fetch/modulus_stuff/blob/master/src/ldc_2d_integrated_iter_0.py)  
+- [x] Call meeting with the team for review and discussing next steps

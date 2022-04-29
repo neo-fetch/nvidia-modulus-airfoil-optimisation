@@ -1,29 +1,37 @@
-# Flat Plate simulation using NVIDIA Modulus (README is outdated. Undergoing changes will be committed soon)
+# Solving aspects of aerodynamics using NVIDIA Modulus
 
 ## Table of Contents
 
 - [About](#about)
 - [Getting Started](#getting_started)
 - [Usage](#usage)
-- [License](https://github.com/neo-fetch/modulus_stuff/blob/master/LICENSE)
+- [License](https://github.com/neo-fetch/nvidia-modulus-airfoil-optimisation/blob/master/LICENSE)
 - [Acknowledgements](#acknowledgements)
 
 ## About <a name = "about"></a>
 
-This project uses the flat plate scenario where a flow incidents the flat plate at an angle. Instead of the traditional Navier stokes provided by the modulus libraries, we use our own implementation of navier stokes.
+This repository uses modulus deeplearning framework to solve some of the different aspects of aerodynamics seen in a flat plate scenario for different speeds, dealing from laminar flow conditions all the way to subsonic and supersonic pockets. We however, use Physics Informed Neural Networks (PINNs) to solve the aerodynamics of the aircraft. The PINNs are implemented in the modulus framework and can be found [here](https://docs.nvidia.com/deeplearning/modulus/)
 
-More on this [here](https://ieeexplore.ieee.org/document/9003058). Please refer to section `III. NUMERICAL MODEL OF FLUID DYNAMICS` of the paper.
+Instead of the traditional Navier stokes provided by the modulus libraries, we use our own implementation of navier stokes(More on this [here](https://ieeexplore.ieee.org/document/9003058). Please refer to section `III. NUMERICAL MODEL OF FLUID DYNAMICS` of the paper for more details on the problem setup.).
 ```
      +---------+
     /|/     \|/|
-   //|// --- //|
+   //|// ---...|
   ///|/////////|
  ////+---------+
  //////////////
  / ////////////
    / //////////
-where '/', '|' and '\' are u + v such that tan-1(v/u) = x degrees(here i kept x as 4).
+where '/', '|' and '\' are u + v such that tan-1(v/u) = x degrees(ranges from  -10 to +10)
 ```
+
+On using the modulus framework for our problem setup, we encounter different problems such as:
+
+- Enforcing the [kutta condition](https://en.wikipedia.org/wiki/Kutta_condition) by constructing a wakeline that allows gradual release of velocity in the y direction.
+
+- Training a neural network solver for a genralized range of angle of attack( here the angle of attack ranges from -10 to +10 degrees) by finding methods to generalize the angle as a parameter.
+
+- Dealing with discontinuities inside the setup by using variational methods, custom loss, KD-Trees and filtered differentiation.
 
 ## Getting Started <a name = "getting_started"></a>
 
@@ -33,14 +41,15 @@ Please visit [NVIDIA Modulus](https://developer.nvidia.com/modulus) for more inf
 
 - [NVIDIA Modulus (Previously known as NVIDIA SimNet)](https://developer.nvidia.com/modulus)
 - [Docker](https://www.docker.com/)
-- [Python](https://www.python.org/)
-- Physics and Math (Fluid dynamics, Computational Fluid Dynamics, and Numerical methods)
+- [Python](https://www.python.org/) with [sympy](https://www.sympy.org/), [numpy](https://www.numpy.org/) and [matplotlib](https://matplotlib.org/)
+- [Paraview](https://www.paraview.org/)
+- Physics and Math (Fluid dynamics, Computational Fluid Dynamics, Numerical methods and basic Machine Learning and training Neural Networks)
 
 ### Installing
 
 A step by step installation guide can be found [here](#getting_started), however this guide feels outdated, as it recommends using nvidia-docker. 
 
-Because I use Arch Linux, Below are the steps I followed to run the docker image. Although I suspect that the overall steps dont change from distro to distro and remain mostly the same:
+Because I use Arch Linux, Below are the steps I followed to run the docker image. Although I suspect that the overall steps dont change from distro to distro and remain mostly the same(I have not tested this but I'm confident as docker is infrastructure agnostic).
 
 The [nvidia-docker](https://aur.archlinux.org/packages/nvidia-docker) AUR package has been deprecated in upstream because you can now use nvidia-container-toolkit in conjunction with docker 19.03's new native GPU support to use [NVIDIA accelerated docker containers](https://wiki.archlinux.org/title/Docker#Run_GPU_accelerated_Docker_containers_with_NVIDIA_GPUs) without needing nvidia-docker.
 
@@ -68,7 +77,7 @@ docker run --shm-size=1g -p 8888:8888 --ulimit memlock=-1 --ulimit stack=6710886
 
 - Clone the repository
 ```
-git clone https://www.github.com/neo-fetch/modulus_stuff.git; cd modulus_stuff
+git clone https://www.github.com/neo-fetch/nvidia-modulus-airfoil-optimisation.git; cd nvidia-modulus-airfoil-optimisation
 ```
 - Run the python script
 
@@ -76,34 +85,12 @@ git clone https://www.github.com/neo-fetch/modulus_stuff.git; cd modulus_stuff
 python src/ldc_2D.py --layer_size 100 --nr_layers 2
 ```
 
-### Running multiple angles
-
-I have made a script that allows you to run my script for multiple angles. The script is located in `src/`
-
-You can simply run it using the following command:
-
-```
-bash runmod.sh
-```
-You can also change the angles you want to run by altering the `src/angles.py` file and streaming the output to `src/angles` textfile.
-
-```
-python src/angles.py > src/angles
-```
-
 ## Results
 
-The following are the results of the simulation.
+The results can be plotted using paraview or numpy and matplotlib.
 
-There are primarily two outputs we are concerned with is the velocity components of the results. The X and Y components of the velocity are shown below.
+The convergence contour plots can be found in the `results` folder.
 
-![x_component](https://i.imgur.com/5Hb9Tg8.png)
-
-Figure 1: X Component of the velocity
-
-![y_component](https://i.imgur.com/zTqp3FZ.png)
-
-Figure 2: Y Component of the velocity
 ## Acknowledgements <a name = "acknowledgements"></a>
 
 - [Mayank Deshpande](https://www.github.com/neo-fetch)

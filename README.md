@@ -1,4 +1,4 @@
-# Flat Plate simulation using NVIDIA Modulus
+# Flat Plate simulation using NVIDIA Modulus (README is outdated. Undergoing changes will be committed soon)
 
 ## Table of Contents
 

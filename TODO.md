@@ -1,6 +1,7 @@
 ### Todo
 
-- [ ] Formulate loss from filtered differentiation and MODULUS self.nets  
+- [ ] Formulate loss from filtered differentiation and MODULUS self.nets
+- [ ] Evaluate errors  
 - [ ] Fix the code formatting: 
     - [ ] Fix the spacing
     - [ ] Fix the line length

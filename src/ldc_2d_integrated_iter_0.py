@@ -1,20 +1,26 @@
+# Importing relevant libraries
 from sympy import Symbol, Eq, Ge, Abs, Function, Number, sin, cos
 from modulus.pdes import PDES
 from modulus.variables import Variables
-import time
 from modulus.solver import Solver
 from modulus.dataset import TrainDomain, InferenceDomain
 from modulus.data import Inference
 from modulus.sympy_utils.geometry_2d import Rectangle, Line
 from modulus.controller import ModulusController
 import numpy as np
-import math
 import sys
 # Importing siddharth's code
 from kd_tree import kd_Tree # (X, D, N, n, point, Du, U)
 
-def get_angle(theta, magnitude):
-    return math.cos(theta)*magnitude, math.sin(theta)*magnitude
+# import math
+# def get_angle(theta, magnitude):
+#     return math.cos(theta)*magnitude, math.sin(theta)*magnitude
+
+# ---------------------------------------------------------------------------------------------------------------------- #
+# The PDES class allows you to write
+# the equations symbolically in Sympy. This allows users to quickly write their equations in the most natural way possible.
+# The Sympy equations are converted to TensorFlow expressions in the back-end and can also be printed to ensure correct
+# implementation.
 
 class Poisson_2D(PDES):
     name = 'Poisson_2D'
@@ -29,6 +35,7 @@ class Poisson_2D(PDES):
         input_variables = {'x': x, 'y': y, 'alpha': alpha}
 
         obstacle_length = 0.10
+
         # potential
         phi = Function('phi')(*input_variables)
         u = Function('u')(*input_variables)
@@ -38,8 +45,7 @@ class Poisson_2D(PDES):
         # Here I implement a simpler form of a 2D Navier-Stokes equation in the form of laplacian(u,v) = 0 such that
         # laplacian(u,v).diff(u) = u and laplacian(u,v).diff(v) = v
         # laplacian(u,v).diff(t) = 0
-        # self.equations['u'] = phi.diff(x) 
-        # self.equations['v'] = phi.diff(y) # redefined below to facilitate tensorboard graphs.
+
         self.equations['residual_u'] = u - phi.diff(x)
         self.equations['residual_v'] = v - phi.diff(y)
         # For the far field conditions, we need to define the boundary conditions for the velocity components
@@ -61,14 +67,20 @@ class Poisson_2D(PDES):
         # The Laplacian we are going to solve is:
         self.equations['Poisson_2D'] = (phi.diff(x)).diff(x) + (phi.diff(y)).diff(y) # grad^2(phi)
 
+# ---------------------------------------------------------------------------------------------------------------------- #
 
 # params for domain
 obstacle_length = 0.10
 height = 6*obstacle_length  
 width = 6*obstacle_length
 
-# define geometry
-# define geometry
+# We begin by defining the required variables for the geometry and then generating the 2D square geometry by instantiating
+# an object of Rectangle type.
+# In Modulus, a Rectangle class is defined using the coordinates for two opposite corner
+# points. 
+# A Line class is defined using the coordinates for two points on the line and +1 or -1 for the direction of the line. 
+# The below code shows the process of generating a our required geometry in Modulus.
+
 rec = Rectangle((-width / 2, -height / 2), (width / 2, height / 2))
 obstacle_above = Line((0, 0), (0, obstacle_length), 1)
 obstacle_below = Line((0, 0), (0, obstacle_length), 1)
@@ -101,9 +113,42 @@ geo = rec
 # define sympy varaibles to parametize domain curves
 x, y, alpha = Symbol('x'), Symbol('y'), Symbol('alpha')
 # limit the range of alpha from -10 to 10 using np.pi.
-y_range_above = {y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(0, height/2.0))}
-y_range_below = {y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(-height/2.0, 0))}
+# y_range_above = {y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(0, height/2.0))}
+# y_range_below = {y: lambda batch_size: np.full((batch_size, 1), np.random.uniform(-height/2.0, 0))}
 fixed_param_range = {alpha: lambda batch_size: np.full((batch_size, 1), np.random.uniform(-np.pi*10/180, np.pi*10/180))}
+
+
+# For generating a boundary condition in Modulus, we need to sample the points on
+# the required boundary/surface of the geometry and then assign them the desired values.
+
+# A boundary can be sampled using the boundary_bc function. This will, however, sample the entire boundary of the
+# geometry, in this case, all the sides of the rectangle. A particular boundary of the geometry can be sub-sampled by
+# using a particular criterion for the boundary_bc using the criteria parameter. For example, to sample the top wall,
+# criteria is set to y=height/2
+
+# The desired values for the boundary condition are listed as a dictionary in outvar_sympy. In the Modulus framework,
+# we define these variables as keys of this dictionary which are converted to appropriate nodes in the computational graph.
+# The number of points to sample on each boundary are specified using the batch_size_per_area parameter.
+
+# Weights to any variables can be specified as an input to the lambda_sympy parameter. A keyword ’lambda_’ is added
+# onto the key names specified in the outvar_sympy to specify the corresponding weights in the total loss function.
+# For example, if we want to weight the loss function by the magnitude of the velocity, we can specify the weights as
+# {'lambda_u': 1, 'lambda_v': 1, 'lambda_phi': 1}
+
+# Equations to solve:
+# The conservation equations of fluid mechanics are enforced on all the points in the
+# interior of the geometry. 
+
+# Similar to sampling boundaries, we will use interior_bc function to sample points in the interior of a geometry. The
+# equations to solve are specified as a dictionary input to outvar_sympy.
+
+# The parameter bounds, determines the range for sampling the values for variables x and y. The lambda_sympy
+# parameter is used to determine the weights for different losses. In this problem, we weight each equation at each point
+# by its distance from the boundary by using the Signed Distance Field (SDF) of the geometry. This implies that the
+# points away from the boundary are weighted higher compared to the ones closer to the boundary. We found that this
+# type of weighting of the loss functions leads to a faster convergence since it avoids discontinuities at the boundaries
+
+# ---------------------------------------------------------------------------------------------------------------------- #
 
 class PotentialTrain(TrainDomain):
     def __init__(self, **config):
@@ -124,7 +169,7 @@ class PotentialTrain(TrainDomain):
         # where / is u + v such that tan-1(v/u) = x degrees(here i kept x as 4).
         u_x = 10*cos(alpha)
         u_y = 10*sin(alpha)
-        flow_rate = u_x*width + u_y*height
+        # flow_rate = u_x*width + u_y*height
 
         # Left wall
         leftWall = geo.boundary_bc(
@@ -293,12 +338,21 @@ class PotentialTrain(TrainDomain):
         # )
         # self.add(neighborhood, name="neighborhood")
 
+# ---------------------------------------------------------------------------------------------------------------------- #
+
+# We will now see how to create an Inference domain to plot the desired variables in the interior
+# at a desired point density.
+# The LDCInference class can be created by inheriting from the InferenceDomain parent class. The points are again
+# sampled in a similar way as done during the definition of LDCTrain and LDCMonitor domains.
+
 class PotentialInference(InferenceDomain):
     def __init__(self, **config):
         super(PotentialInference, self).__init__()
         x, y, alpha = Symbol('x'), Symbol('y'), Symbol('alpha')
         interior = Inference(geo.sample_interior(10000, bounds={x: (-width / 2, width / 2), y: (-height / 2, height / 2)}, param_ranges={alpha: np.pi*(10/180)}), ['u', 'v', 'phi'])
         self.add(interior, name="Inference")
+
+# ---------------------------------------------------------------------------------------------------------------------- #
 
 class PotentialSolver(Solver):
     train_domain = PotentialTrain
@@ -351,28 +405,32 @@ class PotentialSolver(Solver):
         return sub_pc
 
     def custom_loss(self, domain_invar, pred_domain_outvar, true_domain_outvar, step):
-        x_interior = domain_invar['interior']['x'] + domain_invar['RightWall']['x']
-        y_interior = domain_invar['interior']['y'] + domain_invar['RightWall']['y']
+        x_interior = domain_invar['interior']['x'] + domain_invar['RightWall']['x'] # x coordinate of interior points
+        y_interior = domain_invar['interior']['y'] + domain_invar['RightWall']['y'] # y coordinate of interior points
 
-        x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + domain_invar['wakeLine1_Above']['x'] +\
-             domain_invar['wakeLine2_Above']['x'] + domain_invar['wakeLine3_Above']['x']
+        x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + domain_invar['wakeLine1_Above']['x'] +\ 
+             domain_invar['wakeLine2_Above']['x'] + domain_invar['wakeLine3_Above']['x'] # x coordinate of obstacle and wake points above
         y_wkeobs_above = domain_invar['obstacleLineAbove']['y'] + domain_invar['wakeLine1_Above']['y'] +\
-             domain_invar['wakeLine2_Above']['y'] + domain_invar['wakeLine3_Above']['y']
+             domain_invar['wakeLine2_Above']['y'] + domain_invar['wakeLine3_Above']['y'] # y coordinate of obstacle and wake points above
 
         x_wkeobs_below = domain_invar['obstacleLineBelow']['x'] + domain_invar['wakeLine1_Below']['x'] +\
-             domain_invar['wakeLine2_Below']['x'] + domain_invar['wakeLine3_Below']['x']
+             domain_invar['wakeLine2_Below']['x'] + domain_invar['wakeLine3_Below']['x'] # x coordinate of obstacle and wake points below
         y_wkeobs_below = domain_invar['obstacleLineBelow']['y'] + domain_invar['wakeLine1_Below']['y'] +\
-             domain_invar['wakeLine2_Below']['y'] + domain_invar['wakeLine3_Below']['y']
+             domain_invar['wakeLine2_Below']['y'] + domain_invar['wakeLine3_Below']['y'] # y coordinate of obstacle and wake points below
 
         # wkeobs_above = np.asarray([x_wkeobs_above, y_wkeobs_above]).T
         # wkeobs_below = np.asarray([x_wkeobs_below, y_wkeobs_below]).T
         
+        # zip() by default stores a list of tuples. We need to convert the tuples into lists.
         wkeobs_above = list(zip(x_wkeobs_above, y_wkeobs_above))
         wkeobs_above = [list(t) for t in wkeobs_above] # convert from tuple to list
         wkeobs_below = list(zip(x_wkeobs_below, y_wkeobs_below))
         wkeobs_below = [list(t) for t in wkeobs_below] # convert from tuple to list
         interior = list(zip(x_interior, y_interior))
         interior = [list(t) for t in interior] # convert from tuple to list
+
+        ################################################################################################################
+
         # EXPLANATION FOR CODE ABOVE:
         # To form the band we need around the obstacle and wake lines, we need to know 
         # the x and y values of all the interior points, obstacle lines, wake lines and right wall in the event of cut off. 
@@ -395,13 +453,18 @@ class PotentialSolver(Solver):
         
         # Diagram: Band around obstacle and wake lines
 
-        # We need to filter the interior points to only select those that lie within the square. We do this by taking the x and y values of the interior points
-        #  and comparing them to the x and y values of the square. If the x and y values are within the square, we add them to the interior points.
+        # We need to filter the interior points to only select those that lie within the square. 
+        # We do this by taking the x and y values of the interior points
+        # and comparing them to the x and y values of the square. 
+        # If the x and y values are within the square, we add them to the interior points.
 
-        band = []
-        band_range_x = [-obstacle_length, width/2]
-        band_range_y = [-0.15, 0.15]
+        ################################################################################################################
 
+        band = [] # This is the band of points around the obstacle and wake lines.
+        band_range_x = [-obstacle_length, width/2] # This is the range of x values of the band.
+        band_range_y = [-0.15, 0.15] # This is the range of y values of the band.
+
+        # The code below filters the interior points to only select those that lie within the range of the band.
         for i in range(len(x_interior)):
             if band_range_x[0] <= x_interior[i] <= band_range_x[1] and band_range_y[0] <= y_interior[i] <= band_range_y[1]:
                 band.append([x_interior[i], y_interior[i]])
@@ -409,49 +472,55 @@ class PotentialSolver(Solver):
         # We now have all the points within the band. We need to divide the band into above and below y = 0. 
         # We do this by creating two lists, one for above y = 0 and one for below y = 0.
 
-        band_above = []
-        band_below = []
+        band_above = [] # This is the band of points above y = 0.
+        band_below = [] # This is the band of points below y = 0.
 
         for i in range(len(band)):
             if band[i][1] > 0:
-                band_above.append(band[i])
+                band_above.append(band[i]) # If the y value of the point is above y = 0, we add it to the band above.
             else if band[i][1] < 0:
-                band_below.append(band[i])
+                band_below.append(band[i]) # If the y value of the point is below y = 0, we add it to the band below.
         
         # We dont concern ourselves with the points that are exactly on the y = 0 line as we are going to add obstacle and wake points 
         # separately in the code below.
 
-        band_above = band_above + wkeobs_above
-        band_below = band_below + wkeobs_below
+        band_above = band_above + wkeobs_above # We add the obstacle and wake points to the band above.
+        band_below = band_below + wkeobs_below # We add the obstacle and wake points to the band below.
         
         # Now that we have divided the band into above and below y = 0, we can now start our process of dividing 
         # the point cloud into smaller sub point clouds using my good friend sid's subroutine.
-        band_total = band_above + band_below
-        bands = [band_above, band_below]
-        dx = 0.015*obstacle_length
-        dy = 0.015*obstacle_length
-        weights = []
-        neighbors = []
+
+        band_total = band_above + band_below # We combine the band above and below into one list.
+        bands = [band_above, band_below] # We create a list of the above and below band to iterate through them later.
+        dx = 0.015*obstacle_length # This is the distance between the main point and the constructed points across the x axis.
+        dy = 0.015*obstacle_length # This is the distance between the main point and the constructed point across the y axis.
+        weights = [] # This is the list of weights of the neighbors used to interpolate the phi value of the constructed points.
+        neighbors = [] # These are the neighbors of the constructed points n.
         for i in range(2):
             for j in range(len(bands[i])):
-                xfy = [bands[i][j][0] + dx, bands[i][j][1]]
-                xby = [bands[i][j][0] - dx, bands[i][j][1]]
-                xyf = [bands[i][j][0], bands[i][j][1] + (-1)**i*dy]
-                xy = [bands[i][j][0], bands[i][j][1]]
+                xfy = [bands[i][j][0] + dx, bands[i][j][1]] # This is the x in front of the original point.
+                xby = [bands[i][j][0] - dx, bands[i][j][1]] # This is the x behind the original point.
+                xyf = [bands[i][j][0], bands[i][j][1] + (-1)**i*dy] # This is the y next of the original point.
+                xy = [bands[i][j][0], bands[i][j][1]] # This is the original point.
 
-                Nxfy = get_sub_pc(xfy, bands[i], 0.3, (-1)**i*0.6)
-                Nxby = get_sub_pc(xby, bands[i], 0.3, (-1)**i*0.6)
-                Nxy = get_sub_pc(xy, bands[i], 0.3, (-1)**i*0.6)
-                Nxyf = Nxy
+                Nxfy = get_sub_pc(xfy, bands[i], 0.3, (-1)**i*0.6) # This is the sub point cloud of the x in front of the original point.
+                Nxby = get_sub_pc(xby, bands[i], 0.3, (-1)**i*0.6) # This is the sub point cloud of the x behind the original point.
+                Nxy = get_sub_pc(xy, bands[i], 0.3, (-1)**i*0.6) # This is the sub point cloud of the original point.
+                Nxyf = Nxy # This is the sub point cloud of the y next of the original point, and is the same as Nxy.
 
-                # def kd_Tree(X, D, N, n, point):
+                # We now use sid's subroutine to get the neighbors and weights of the constructed points. 
+                # Sid's subroutine uses KD tree to find the neighbors and their corresponding weights for the constructed points.
+                # The weights are calculated using the inverse-square of the distance between the constructed point and the neighbors.
+                # The neighbors are for now taken as 7 points.
+                # The neighbors may be points that are within the band, or outside of it.
+
                 Wxfy, neigh_xfy = kd_Tree(Nxfy, 2, len(Nxfy), 7, xfy)
                 Wxby, neigh_xby = kd_Tree(Nxby, 2, len(Nxby), 7, xby)
                 Wxyf, neigh_xyf = kd_Tree(Nxyf, 2, len(Nxyf), 7, xyf)
                 # Wxy, neigh_xy = kd_Tree(Nxy, 2, len(Nxy), 7, xy)
 
-                weights.append([Wxfy, Wxby, Wxyf])
-                neighbors.append([neigh_xfy, neigh_xby, neigh_xyf, xy])
+                weights.append([Wxfy, Wxby, Wxyf]) # We add the weights of the neighbors to the weights list.
+                neighbors.append([neigh_xfy, neigh_xby, neigh_xyf, xy]) # We add the neighbors to the neighbors list.
         
         # In the code above, we need 4 points: two points on the x-axis for central differentiation and one 
         # point on the y-axis for backward differentiation. We then use these points to find the sub point cloud around them. 
@@ -461,44 +530,45 @@ class PotentialSolver(Solver):
         # For now each entry in weight and neighbor corresponds to information about 4 points: xfy, xby, xyf, xy. 
         # Since we specified the neighbors as 7, we will have 7 dimensional vector for each of theses points, 
         # making it a total of 4 times 7 = 28 entries per point (x,y).
-        u_band = []
-        v_band = []
+
+        u_band = [] # This is the list that stores the u values within the band initially. 
+        v_band = [] # This is the list that stores the v values within the band initially.
         for i in range(len(neighbors[0])):
             # xfy
-            x_xfy = [x for x,y in neighbors[i][0]]
-            y_xfy = [y for x,y in neighbors[i][0]]
+            x_xfy = [x for x,y in neighbors[i][0]] # We create a list of the x values of the neighbors of xfy.
+            y_xfy = [y for x,y in neighbors[i][0]] # We create a list of the y values of the neighbors of xfy.
 
             # xby
-            x_xby = [x for x,y in neighbors[i][1]]
-            y_xby = [y for x,y in neighbors[i][1]]
+            x_xby = [x for x,y in neighbors[i][1]] # We create a list of the x values of the neighbors of xby.
+            y_xby = [y for x,y in neighbors[i][1]] # We create a list of the y values of the neighbors of xby.
 
             # xyf
-            x_xyf = [x for x,y in neighbors[i][2]]
-            y_xyf = [y for x,y in neighbors[i][2]]
+            x_xyf = [x for x,y in neighbors[i][2]] # We create a list of the x values of the neighbors of xyf.
+            y_xyf = [y for x,y in neighbors[i][2]] # We create a list of the y values of the neighbors of xyf.
 
             # phi xfy
-            phi_xfy = self.nets[0].evaluate({'x': x_xfy, 'y': y_xfy})['phi']
+            phi_xfy = self.nets[0].evaluate({'x': x_xfy, 'y': y_xfy})['phi'] # We evaluate the phi values of the neighbors of xfy using the neural network.
 
             # phi xby
-            phi_xby = self.nets[0].evaluate({'x': x_xby, 'y': y_xby})['phi']
+            phi_xby = self.nets[0].evaluate({'x': x_xby, 'y': y_xby})['phi'] # We evaluate the phi values of the neighbors of xby using the neural network.
 
             # phi xyf
-            phi_xyf = self.nets[0].evaluate({'x': x_xyf, 'y': y_xyf})['phi']
+            phi_xyf = self.nets[0].evaluate({'x': x_xyf, 'y': y_xyf})['phi'] # We evaluate the phi values of the neighbors of xyf using the neural network.
 
             # phi xy
-            phi_xy = self.nets[0].evaluate({'x': xy[0], 'y': xy[1]})['phi']
+            phi_xy = self.nets[0].evaluate({'x': xy[0], 'y': xy[1]})['phi'] # We evaluate the phi values of the original point using the neural network.
 
-            # Interpolating phi for xfy, xby, xyf
+            # Interpolating phi for xfy, xby, xyf using phi_interpolation()
 
-            phi_xfy = phi_interpolation(phi_xfy, len(phi_xfy), weights[i][0])
+            phi_xfy = phi_interpolation(phi_xfy, len(phi_xfy), weights[i][0]) # We interpolate the phi values of the neighbors of xfy using the weighted average.
 
-            phi_xby = phi_interpolation(phi_xby, len(phi_xby), weights[i][1])
+            phi_xby = phi_interpolation(phi_xby, len(phi_xby), weights[i][1]) # We interpolate the phi values of the neighbors of xby using the weighted average.
 
-            phi_xyf = phi_interpolation(phi_xyf, len(phi_xyf), weights[i][2])
+            phi_xyf = phi_interpolation(phi_xyf, len(phi_xyf), weights[i][2]) # We interpolate the phi values of the neighbors of xyf using the weighted average.
 
             # Calculating u and v
-            u_band.append([xy[0], xy[1]], [(phi_xfy - phi_xby)/(2*dx)])
-            v_band.append([xy[0], xy[1]], [abs(phi_xyf - phi_xy)/(dy)])
+            u_band.append([xy[0], xy[1]], [(phi_xfy - phi_xby)/(2*dx)]) # We calculate the u value of the original point using the central difference formula.
+            v_band.append([xy[0], xy[1]], [abs(phi_xyf - phi_xy)/(dy)]) # We calculate the v value of the original point using the forward/backward difference formula.
 
         # We now have the u and v values for each point in the point cloud. We now need to find the u and v values outside the band.
         # We do this by finding the points that are outside the band and then using the neural network to evaluate them.
@@ -509,9 +579,10 @@ class PotentialSolver(Solver):
         y_outside = [y for x,y in interior if x,y not in band_total]
                 
         # We now use the neural network(self.nets[0]) to evaluate the points that are outside the band.
-        u_outside = self.nets[0].evaluate({'x': x_outside, 'y': y_outside})['u']
-        v_outside = self.nets[0].evaluate({'x': x_outside, 'y': y_outside})['v']
+        phi_outside = self.nets[0].evaluate({'x': x_outside, 'y': y_outside})['phi']
 
+        u_interior = tf.gradients(phi_outside, x_outside)[0] # We calculate the u values of the points outside the band using d(phi)/dx (automatic differentiation).
+        v_interior = tf.gradients(phi_outside, y_outside)[0] # We calculate the v values of the points outside the band using d(phi)/dy (automatic differentiation).
 
     @classmethod
     def update_defaults(cls, defaults):
@@ -524,18 +595,8 @@ class PotentialSolver(Solver):
             }
         )
 
+# ---------------------------------------------------------------------------------------------------------------------- #
+
 if __name__ == "__main__":
     ctr = ModulusController(PotentialSolver)
     ctr.run()
-
-    # U_points = open("pointcloud_u_vector.csv")
-    # U = np.loadtxt(U_points, delimiter=",")
-
-    # Du = int(input("Enter the dimensionality of u(phi) function (Du): "))
-    # print("Reading the data from pointcloud_u_vector.csv file ...")
-
-    # #This array is used to store all the interpolated values, if Du >= 2.
-    # interpolated_ux_arr = np.zeros(Du, dtype = float)
-
-    # #Case-1: if u is a scalar.
-    # if(Du==1):

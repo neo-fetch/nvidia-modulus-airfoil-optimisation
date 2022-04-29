@@ -5,6 +5,7 @@ from modulus.variables import Variables
 from modulus.solver import Solver
 from modulus.dataset import TrainDomain, InferenceDomain
 from modulus.data import Inference
+import tensorflow as tf
 from modulus.sympy_utils.geometry_2d import Rectangle, Line
 from modulus.controller import ModulusController
 import numpy as np
@@ -408,15 +409,11 @@ class PotentialSolver(Solver):
         x_interior = domain_invar['interior']['x'] + domain_invar['RightWall']['x'] # x coordinate of interior points
         y_interior = domain_invar['interior']['y'] + domain_invar['RightWall']['y'] # y coordinate of interior points
 
-        x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + domain_invar['wakeLine1_Above']['x'] +\ 
-             domain_invar['wakeLine2_Above']['x'] + domain_invar['wakeLine3_Above']['x'] # x coordinate of obstacle and wake points above
-        y_wkeobs_above = domain_invar['obstacleLineAbove']['y'] + domain_invar['wakeLine1_Above']['y'] +\
-             domain_invar['wakeLine2_Above']['y'] + domain_invar['wakeLine3_Above']['y'] # y coordinate of obstacle and wake points above
+        x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + domain_invar['wakeLine1_Above']['x'] + domain_invar['wakeLine2_Above']['x'] + domain_invar['wakeLine3_Above']['x'] # x coordinate of obstacle and wake points above
+        y_wkeobs_above = domain_invar['obstacleLineAbove']['y'] + domain_invar['wakeLine1_Above']['y'] + domain_invar['wakeLine2_Above']['y'] + domain_invar['wakeLine3_Above']['y'] # y coordinate of obstacle and wake points above
 
-        x_wkeobs_below = domain_invar['obstacleLineBelow']['x'] + domain_invar['wakeLine1_Below']['x'] +\
-             domain_invar['wakeLine2_Below']['x'] + domain_invar['wakeLine3_Below']['x'] # x coordinate of obstacle and wake points below
-        y_wkeobs_below = domain_invar['obstacleLineBelow']['y'] + domain_invar['wakeLine1_Below']['y'] +\
-             domain_invar['wakeLine2_Below']['y'] + domain_invar['wakeLine3_Below']['y'] # y coordinate of obstacle and wake points below
+        x_wkeobs_below = domain_invar['obstacleLineBelow']['x'] + domain_invar['wakeLine1_Below']['x'] + domain_invar['wakeLine2_Below']['x'] + domain_invar['wakeLine3_Below']['x'] # x coordinate of obstacle and wake points below
+        y_wkeobs_below = domain_invar['obstacleLineBelow']['y'] + domain_invar['wakeLine1_Below']['y'] + domain_invar['wakeLine2_Below']['y'] + domain_invar['wakeLine3_Below']['y'] # y coordinate of obstacle and wake points below
 
         # wkeobs_above = np.asarray([x_wkeobs_above, y_wkeobs_above]).T
         # wkeobs_below = np.asarray([x_wkeobs_below, y_wkeobs_below]).T
@@ -478,7 +475,7 @@ class PotentialSolver(Solver):
         for i in range(len(band)):
             if band[i][1] > 0:
                 band_above.append(band[i]) # If the y value of the point is above y = 0, we add it to the band above.
-            else if band[i][1] < 0:
+            elif band[i][1] < 0:
                 band_below.append(band[i]) # If the y value of the point is below y = 0, we add it to the band below.
         
         # We dont concern ourselves with the points that are exactly on the y = 0 line as we are going to add obstacle and wake points 
@@ -575,8 +572,8 @@ class PotentialSolver(Solver):
 
         # We first find the points that are outside the band.
 
-        x_outside = [x for x,y in interior if x,y not in band_total]
-        y_outside = [y for x,y in interior if x,y not in band_total]
+        x_outside = [x for x,y in interior if (x,y) not in band_total]
+        y_outside = [y for x,y in interior if (x,y) not in band_total]
                 
         # We now use the neural network(self.nets[0]) to evaluate the points that are outside the band.
         phi_outside = self.nets[0].evaluate({'x': x_outside, 'y': y_outside})['phi']

@@ -33,6 +33,13 @@ On using the modulus framework for our problem setup, we encounter different pro
 
 - Dealing with discontinuities inside the setup by using variational methods, custom loss, KD-Trees and filtered differentiation.
 
+Functional values may need to be differentiated at points close to discontinuous boundaries, where information cannot be allowed to flow across discontinuities. This means that derivatives at points on the other side of a discontinuous surface cannot be obtained by using points on the opposite side of the surface as a reference. 
+
+The process of getting derivatives is called "filtered differentiation." This means that at certain points in the process, the values at certain points are not taken into account when getting derivatives. Due to its automatic differentiation process, Modulus software can't do this because it doesn't have any mechanisms known for filtering.
+
+As a result, we developed a novel approach that enables the implementation of Filtered Differentiation (FD) at specific points. Obviously, this results in longer computation times; thus, one of the principles followed in this implementation is to perform FD evaluation only at necessary points.
+
+
 ## Getting Started <a name = "getting_started"></a>
 
 Please visit [NVIDIA Modulus](https://developer.nvidia.com/modulus) for more information.

@@ -572,8 +572,8 @@ class PotentialSolver(Solver):
 
         # We first find the points that are outside the band.
 
-        x_outside = [x for x,y in interior if (x,y) not in band_total]
-        y_outside = [y for x,y in interior if (x,y) not in band_total]
+        x_outside = [x for x,y in interior if (x,y) not in band_total] # We create a list of the x values of the points outside the band.
+        y_outside = [y for x,y in interior if (x,y) not in band_total] # We create a list of the y values of the points outside the band.
                 
         # We now use the neural network(self.nets[0]) to evaluate the points that are outside the band.
         phi_outside = self.nets[0].evaluate({'x': x_outside, 'y': y_outside})['phi']

@@ -174,9 +174,9 @@ class PotentialTrain(TrainDomain):
 
         # Left wall
         leftWall = geo.boundary_bc(
-            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y, 
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # Mimicing the far field conditions "u":u_x , "v": u_y,
             batch_size_per_area=250*2,
-            criteria=Eq(x, -width / 2),
+            criteria=Eq(x, -width / 2), # As the left wall lies on x = -width/2, we set the criteria to be x = -width/2
             param_ranges ={**fixed_param_range},
             fixed_var=False
         )
@@ -194,9 +194,9 @@ class PotentialTrain(TrainDomain):
 
         # Top wall
         topWall = geo.boundary_bc(
-            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y,
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # Mimicing the far field conditions "u":u_x , "v": u_y,
             batch_size_per_area=250*2,
-            criteria=Eq(y, height / 2),
+            criteria=Eq(y, height / 2), # As the top wall lies on y = height/2, we set the criteria to be y = height/2
             param_ranges ={**fixed_param_range},
             fixed_var=False
         )
@@ -204,9 +204,9 @@ class PotentialTrain(TrainDomain):
 
         # Right wall
         rightWall = geo.boundary_bc(
-            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y,
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # Mimicing the far field conditions "u":u_x , "v": u_y,
             batch_size_per_area=250*2,
-            criteria=Eq(x, width / 2),
+            criteria=Eq(x, width / 2), # As the right wall lies on x = width/2, we set the criteria to be x = width/2
             param_ranges ={**fixed_param_range},
             fixed_var=False
         )
@@ -214,9 +214,9 @@ class PotentialTrain(TrainDomain):
 
         # Bottom Wall
         bottomWall = geo.boundary_bc(
-            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # "u": u_x, "v": u_y
+            outvar_sympy={"residual_u_comp": 0, "residual_v_comp": 0}, # Mimicing the far field conditions "u":u_x , "v": u_y,
             batch_size_per_area=250*2,
-            criteria=Eq(y, -height / 2),
+            criteria=Eq(y, -height / 2), # As the bottom wall lies on y = -height/2, we set the criteria to be y = -height/2
             param_ranges ={**fixed_param_range},
             fixed_var=False            
         )
@@ -224,9 +224,9 @@ class PotentialTrain(TrainDomain):
 
         # obstacleLine Above
         obstacleLineAbove = obstacle_above.boundary_bc(
-            outvar_sympy={"u": u_x, 'residual_obstacle_above': 0},
+            outvar_sympy={"u": u_x, 'residual_obstacle_above': 0}, # Setting up the no slip condition for the obstacle. 
             batch_size_per_area=600*2,
-            lambda_sympy={"lambda_u": 100, "lambda_residual_obstacle_above": geo.sdf},
+            lambda_sympy={"lambda_u": 100, "lambda_residual_obstacle_above": geo.sdf}, # Weights for the loss function.
             param_ranges ={**fixed_param_range},
             # param_ranges ={**y_range_above, **fixed_param_range},
             fixed_var=False            
@@ -374,46 +374,61 @@ class PotentialSolver(Solver):
     # which is a function of inverse square of the distance from the neighbor point to the interpolation point.
     # Credits: Siddarth Agarwal
     def phi_interpolation(phi, n, weigth_arr):
-        interpolated_phi_x = 0
-        phi_x_numer = 0
-        phi_x_denom = 0
+        interpolated_phi_x = 0 # Initialize the interpolated value of phi_x
+        phi_x_numer = 0 # Initialize the numerator of the interpolated value of phi_x
+        phi_x_denom = 0 # Initialize the denominator of the interpolated value of phi_x
         flag_val = 0 #To check whether the interpolation function follows the condition when distance == 0.
         for i in range(0,n):
             if(dist[i]==0):
-                interpolated_phi_x = phi[i]
-                flag_val = 1
+                interpolated_phi_x = phi[i] # If the distance is zero, then the interpolated value of phi_x 
+                flag_val = 1                # is the value of the point itself.
                 break
             else:
-                phi_x_numer = phi_x_numer + (weigth_arr[i]*phi[i])
-                phi_x_denom = phi_x_denom + weigth_arr[i]
-        if(flag_val==1):
+                phi_x_numer = phi_x_numer + (weigth_arr[i]*phi[i]) # If the distance is not zero, 
+                phi_x_denom = phi_x_denom + weigth_arr[i]          # then the numerator and denominator of the
+        if(flag_val==1):                                           # interpolated value of phi_x are calculated using weighted average function.
             return(interpolated_phi_x)
-        elif(flag_val==0 and phi_x_denom!=0):
+        elif(flag_val==0 and phi_x_denom!=0): # If the interpolation function does not follow the condition when distance == 0
             return(phi_x_numer/phi_x_denom)
 
     # The following function generates a sub point cloud using the given point cloud 
     # and the given bounding box around the given point coordinate.
     def get_sub_pc(self, point, band, x_range, y_range):
         x_range = [[point[0] - x_range*obstacle_length, -obstacle_length][point[0] - x_range*obstacle_length < -obstacle_length], \
-            [point[0] + x_range*obstacle_length, width/2][point[0] + x_range*obstacle_length > width/2]]
+            [point[0] + x_range*obstacle_length, width/2][point[0] + x_range*obstacle_length > width/2]] # Set the x range of the sub point cloud
 
-        y_range = sorted([0, point[1] + y_range*obstacle_length])
+        y_range = sorted([0, point[1] + y_range*obstacle_length]) # Set the y range of the sub point cloud
         
-        sub_pc = []
+        sub_pc = [] # Initialize the sub point cloud
         for i in range(len(band)):
-            if x_range[0] <= band[i][0] <= x_range[1] and y_range[0] <= band[i][1] <= y_range[1]:
-                sub_pc.append(band[i])
+            if x_range[0] <= band[i][0] <= x_range[1] and \
+                y_range[0] <= band[i][1] <= y_range[1]:
+                sub_pc.append(band[i]) # If the point lies in the given bounding box, then add it to the sub point cloud
         return sub_pc
 
     def custom_loss(self, domain_invar, pred_domain_outvar, true_domain_outvar, step):
-        x_interior = domain_invar['interior']['x'] + domain_invar['RightWall']['x'] # x coordinate of interior points
-        y_interior = domain_invar['interior']['y'] + domain_invar['RightWall']['y'] # y coordinate of interior points
+        x_interior = domain_invar['interior']['x'] + \
+            domain_invar['RightWall']['x'] # x coordinate of interior points
+        y_interior = domain_invar['interior']['y'] + \
+            domain_invar['RightWall']['y'] # y coordinate of interior points
 
-        x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + domain_invar['wakeLine1_Above']['x'] + domain_invar['wakeLine2_Above']['x'] + domain_invar['wakeLine3_Above']['x'] # x coordinate of obstacle and wake points above
-        y_wkeobs_above = domain_invar['obstacleLineAbove']['y'] + domain_invar['wakeLine1_Above']['y'] + domain_invar['wakeLine2_Above']['y'] + domain_invar['wakeLine3_Above']['y'] # y coordinate of obstacle and wake points above
+        x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + \
+            domain_invar['wakeLine1_Above']['x'] + \
+                domain_invar['wakeLine2_Above']['x'] + \
+                    domain_invar['wakeLine3_Above']['x'] # x coordinate of obstacle and wake points above
+        y_wkeobs_above = domain_invar['obstacleLineAbove']['y'] + \
+            domain_invar['wakeLine1_Above']['y'] + \
+                domain_invar['wakeLine2_Above']['y'] + \
+                    domain_invar['wakeLine3_Above']['y'] # y coordinate of obstacle and wake points above
 
-        x_wkeobs_below = domain_invar['obstacleLineBelow']['x'] + domain_invar['wakeLine1_Below']['x'] + domain_invar['wakeLine2_Below']['x'] + domain_invar['wakeLine3_Below']['x'] # x coordinate of obstacle and wake points below
-        y_wkeobs_below = domain_invar['obstacleLineBelow']['y'] + domain_invar['wakeLine1_Below']['y'] + domain_invar['wakeLine2_Below']['y'] + domain_invar['wakeLine3_Below']['y'] # y coordinate of obstacle and wake points below
+        x_wkeobs_below = domain_invar['obstacleLineBelow']['x'] + \
+            domain_invar['wakeLine1_Below']['x'] + \
+                domain_invar['wakeLine2_Below']['x'] + \
+                    domain_invar['wakeLine3_Below']['x'] # x coordinate of obstacle and wake points below
+        y_wkeobs_below = domain_invar['obstacleLineBelow']['y'] + \
+            domain_invar['wakeLine1_Below']['y'] + \
+                domain_invar['wakeLine2_Below']['y'] + \
+                    domain_invar['wakeLine3_Below']['y'] # y coordinate of obstacle and wake points below
 
         # wkeobs_above = np.asarray([x_wkeobs_above, y_wkeobs_above]).T
         # wkeobs_below = np.asarray([x_wkeobs_below, y_wkeobs_below]).T
@@ -463,7 +478,8 @@ class PotentialSolver(Solver):
 
         # The code below filters the interior points to only select those that lie within the range of the band.
         for i in range(len(x_interior)):
-            if band_range_x[0] <= x_interior[i] <= band_range_x[1] and band_range_y[0] <= y_interior[i] <= band_range_y[1]:
+            if band_range_x[0] <= x_interior[i] <= band_range_x[1] and \
+                band_range_y[0] <= y_interior[i] <= band_range_y[1]:
                 band.append([x_interior[i], y_interior[i]])
 
         # We now have all the points within the band. We need to divide the band into above and below y = 0. 
@@ -572,8 +588,8 @@ class PotentialSolver(Solver):
 
         # We first find the points that are outside the band.
 
-        x_outside = [x for x,y in interior if (x,y) not in band_total] # We create a list of the x values of the points outside the band.
-        y_outside = [y for x,y in interior if (x,y) not in band_total] # We create a list of the y values of the points outside the band.
+        x_outside = [x for x,y in interior if (x,y) not in band_total]
+        y_outside = [y for x,y in interior if (x,y) not in band_total]
                 
         # We now use the neural network(self.nets[0]) to evaluate the points that are outside the band.
         phi_outside = self.nets[0].evaluate({'x': x_outside, 'y': y_outside})['phi']

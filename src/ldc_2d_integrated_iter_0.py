@@ -373,7 +373,7 @@ class PotentialSolver(Solver):
     # the interpolation function as weighted average of the vector points using the weight array
     # which is a function of inverse square of the distance from the neighbor point to the interpolation point.
     # Credits: Siddarth Agarwal
-    def phi_interpolation(phi, n, weigth_arr):
+    def phi_interpolation(phi, n, weigth_arr, dist):
         interpolated_phi_x = 0 # Initialize the interpolated value of phi_x
         phi_x_numer = 0 # Initialize the numerator of the interpolated value of phi_x
         phi_x_denom = 0 # Initialize the denominator of the interpolated value of phi_x
@@ -407,10 +407,10 @@ class PotentialSolver(Solver):
         return sub_pc
 
     def custom_loss(self, domain_invar, pred_domain_outvar, true_domain_outvar, step):
-        x_interior = domain_invar['interior']['x'] + \
-            domain_invar['RightWall']['x'] # x coordinate of interior points
-        y_interior = domain_invar['interior']['y'] + \
-            domain_invar['RightWall']['y'] # y coordinate of interior points
+        x_interior = list(tf.make_ndarray(domain_invar['interior']['x'])) + \
+            list(tf.make_ndarray(domain_invar['RightWall']['x'])) # x coordinate of interior points
+        y_interior = list(tf.make_ndarray(domain_invar['interior']['y'])) + \
+            list(tf.make_ndarray(domain_invar['RightWall']['y'])) # y coordinate of interior points
 
         x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + \
             domain_invar['wakeLine1_Above']['x'] + \
@@ -474,7 +474,7 @@ class PotentialSolver(Solver):
 
         band = [] # This is the band of points around the obstacle and wake lines.
         band_range_x = [-obstacle_length, width/2] # This is the range of x values of the band.
-        band_range_y = [-0.15, 0.15] # This is the range of y values of the band.
+        band_range_y = [-0.015, 0.015] # This is the range of y values of the band.
 
         # The code below filters the interior points to only select those that lie within the range of the band.
         for i in range(len(x_interior)):
@@ -594,8 +594,8 @@ class PotentialSolver(Solver):
         # We now use the neural network(self.nets[0]) to evaluate the points that are outside the band.
         phi_outside = self.nets[0].evaluate({'x': x_outside, 'y': y_outside})['phi']
 
-        u_interior = tf.gradients(phi_outside, x_outside)[0] # We calculate the u values of the points outside the band using d(phi)/dx (automatic differentiation).
-        v_interior = tf.gradients(phi_outside, y_outside)[0] # We calculate the v values of the points outside the band using d(phi)/dy (automatic differentiation).
+        u_outside = tf.gradients(phi_outside, x_outside)[0] # We calculate the u values of the points outside the band using d(phi)/dx (automatic differentiation).
+        v_outside = tf.gradients(phi_outside, y_outside)[0] # We calculate the v values of the points outside the band using d(phi)/dy (automatic differentiation).
 
     @classmethod
     def update_defaults(cls, defaults):

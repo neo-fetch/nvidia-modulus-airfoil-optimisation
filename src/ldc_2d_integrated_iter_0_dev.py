@@ -16,7 +16,7 @@ from kd_tree import kd_Tree # (X, D, N, n, point, Du, U)
 # import math
 # def get_angle(theta, magnitude):
 #     return math.cos(theta)*magnitude, math.sin(theta)*magnitude
-def get_sub_pc(self, point, band, x_range, y_range):
+def get_sub_pc(point, band, x_range, y_range):
     x_range = [[point[0] - x_range*obstacle_length, -obstacle_length][point[0] - x_range*obstacle_length < -obstacle_length], \
         [point[0] + x_range*obstacle_length, width/2][point[0] + x_range*obstacle_length > width/2]] # Set the x range of the sub point cloud
 
@@ -29,11 +29,168 @@ def get_sub_pc(self, point, band, x_range, y_range):
             sub_pc.append(band[i]) # If the point lies in the given bounding box, then add it to the sub point cloud
     return sub_pc
 
+
+def init_domain(domain_invar, pred_domain_outvar, true_domain_outvar, step):
+    
+    x_interior = tf.concat([domain_invar['interior']['x'], domain_invar['RightWall']['x']], axis=0) # Concatenate the interior and the right wall for x
+    y_interior = tf.concat([domain_invar['interior']['y'], domain_invar['RightWall']['y']], axis=0) # Concatenate the interior and the right wall for y
+
+    x_wkeobs_above = tf.concat([domain_invar['obstacleLineAbove']['x'],domain_invar['wakeLine1_Above']['x'],domain_invar['wakeLine2_Above']['x'],domain_invar['wakeLine3_Above']['x']], axis = 0) # x coordinate of obstacle and wake points above
+    y_wkeobs_above = tf.concat([domain_invar['obstacleLineAbove']['y'],domain_invar['wakeLine1_Above']['y'],domain_invar['wakeLine2_Above']['y'],domain_invar['wakeLine3_Above']['y']], axis = 0) # y coordinate of obstacle and wake points above
+
+    x_wkeobs_below = tf.concat([domain_invar['obstacleLineBelow']['x'],domain_invar['wakeLine1_Below']['x'],domain_invar['wakeLine2_Below']['x'],domain_invar['wakeLine3_Below']['x']], axis = 0) # x coordinate of obstacle and wake points below
+    y_wkeobs_below = tf.concat([domain_invar['obstacleLineBelow']['y'],domain_invar['wakeLine1_Below']['y'],domain_invar['wakeLine2_Below']['y'],domain_invar['wakeLine3_Below']['y']], axis = 0) # y coordinate of obstacle and wake points below
+
+    # wkeobs_above = np.asarray([x_wkeobs_above, y_wkeobs_above]).T
+    # wkeobs_below = np.asarray([x_wkeobs_below, y_wkeobs_below]).T
+
+    # zip() by default stores a list of tuples. We need to convert the tuples into lists.
+    wkeobs_above = list(zip(x_wkeobs_above, y_wkeobs_above))
+    wkeobs_above = [list(t) for t in wkeobs_above] # convert from tuple to list
+    wkeobs_below = list(zip(x_wkeobs_below, y_wkeobs_below))
+    wkeobs_below = [list(t) for t in wkeobs_below] # convert from tuple to list
+    interior = list(zip(x_interior, y_interior))
+    interior = [list(t) for t in interior] # convert from tuple to list
+
+    ################################################################################################################
+
+    # EXPLANATION FOR CODE ABOVE:
+    # To form the band we need around the obstacle and wake lines, we need to know 
+    # the x and y values of all the interior points, obstacle lines, wake lines and right wall in the event of cut off. 
+    # The code above does this by adding the x and y values of all the relevant regions.
+
+    # We now move on to filtering our points to match our criteria for selection of points around the obstacle and wake lines. 
+    # A diagram below shows us the band of points around the obstacle and wake lines.
+
+    # +-------------------+
+    # |                   |
+    # |                   |
+    # |     +-------------+
+    # |     |/////////////|
+    # |     |---==========|
+    # |     |\\\\\\\\\\\\\|
+    # |     +-------------+
+    # |                   |
+    # |                   |
+    # +-------------------+
+
+    # Diagram: Band around obstacle and wake lines
+
+    # We need to filter the interior points to only select those that lie within the square. 
+    # We do this by taking the x and y values of the interior points
+    # and comparing them to the x and y values of the square. 
+    # If the x and y values are within the square, we add them to the interior points.
+
+    ################################################################################################################
+
+    band = [] # This is the band of points around the obstacle and wake lines.
+    belt = [] # This is the belt of points around the obstacle and wake lines.
+    band_range_x = [-obstacle_length, width/2] # This is the range of x values of the band.
+    band_range_y_belt = [-0.015, 0.015] # This is the range of y values of the belt.
+    band_range_y = [-0.06, 0.06] # This is the range of y values of the band.
+
+    # The code below filters the interior points to only select those that lie within the range of the band.
+    for i in range(len(x_interior)):
+        if band_range_x[0] <= x_interior[i] <= band_range_x[1] and \
+            band_range_y[0] <= y_interior[i] <= band_range_y[1]:
+            band.append([x_interior[i], y_interior[i]])
+
+    # The code below filters the interior points to only select those that lie within the range of the belt.
+    for i in range(len(band)):
+        if band_range_y_belt[0] <= band[i][1] <= band_range_y_belt[1] and \
+            band_range_x[0] <= band[i][0] <= band_range_x[1]:
+            belt.append([band[i][0], band[i][1]])
+
+    # While band is used for getting the sub point cloud, the belt is used for getting three hypothetical points.
+
+    # We now have all the points within the band. We need to divide the band into above and below y = 0. 
+    # We do this by creating two lists, one for above y = 0 and one for below y = 0.
+
+    band_above = [] # This is the band of points above y = 0.
+    band_below = [] # This is the band of points below y = 0.
+
+    belt_above = [] # This is the belt of points above y = 0.
+    belt_below = [] # This is the belt of points below y = 0.
+
+    for i in range(len(band)):
+        if band[i][1] > 0:
+            band_above.append(band[i]) # If the y value of the point is above y = 0, we add it to the band above.
+        elif band[i][1] < 0:
+            band_below.append(band[i]) # If the y value of the point is below y = 0, we add it to the band below.
+
+    for i in range(len(belt)):
+        if belt[i][1] > 0:
+            belt_above.append(belt[i]) # If the y value of the point is above y = 0, we add it to the belt above.
+        elif belt[i][1] < 0:
+            belt_below.append(belt[i]) # If the y value of the point is below y = 0, we add it to the belt below.
+
+    # We dont concern ourselves with the points that are exactly on the y = 0 line as we are going to add obstacle and wake points 
+    # separately in the code below.
+
+    band_above = band_above + wkeobs_above # We add the obstacle and wake points to the band above.
+    band_below = band_below + wkeobs_below # We add the obstacle and wake points to the band below.
+
+    belt_above = belt_above + wkeobs_above # We add the obstacle and wake points to the belt above.
+    belt_below = belt_below + wkeobs_below # We add the obstacle and wake points to the belt below.
+
+    # Now that we have divided the band into above and below y = 0, we can now start our process of dividing 
+    # the point cloud into smaller sub point clouds using my good friend sid's subroutine.
+
+    band_total = band_above + band_below # We combine the band above and below into one list.
+    belt_total = belt_above + belt_below # We combine the belt above and below into one list.
+    bands = [band_above, band_below] # We create a list of the above and below band to iterate through them later.
+    belts = [belt_above, belt_below] # We create a list of the above and below belt to iterate through them later.
+    dx = 0.015*obstacle_length # This is the distance between the main point and the constructed points across the x axis.
+    dy = 0.015*obstacle_length # This is the distance between the main point and the constructed point across the y axis.
+    weights = [] # This is the list of weights of the neighbors used to interpolate the phi value of the constructed points.
+    neighbors = [] # These are the neighbors of the constructed points n.
+
+    for i in range(2):
+        for j in range(len(belt[i])):
+            xfy = [belt[i][j][0] + dx, belt[i][j][1]] # This is the x in front of the original point.
+            xby = [belt[i][j][0] - dx, belt[i][j][1]] # This is the x behind the original point.
+            xyf = [belt[i][j][0], belt[i][j][1] + (-1)**i*dy] # This is the y next of the original point.
+            xyff = [belt[i][j][0], belt[i][j][1] + (-1)**i*(2*dy)] # This is the y next next of the original point.
+            xy = [belt[i][j][0], belt[i][j][1]] # This is the original point.
+
+            Nxfy = get_sub_pc(xfy, bands[i], 0.3, (-1)**i*0.6) # This is the sub point cloud of the x in front of the original point.
+            Nxby = get_sub_pc(xby, bands[i], 0.3, (-1)**i*0.6) # This is the sub point cloud of the x behind the original point.
+            Nxy = get_sub_pc(xy, bands[i], 0.3, (-1)**i*0.6) # This is the sub point cloud of the original point.
+            Nxyf = Nxyff = Nxy # This is the sub point cloud of the y next of the original point, and is the same as Nxy.
+
+            # We now use sid's subroutine to get the neighbors and weights of the constructed points. 
+            # Sid's subroutine uses KD tree to find the neighbors and their corresponding weights for the constructed points.
+            # The weights are calculated using the inverse-square of the distance between the constructed point and the neighbors.
+            # The neighbors are for now taken as 7 points.
+            # The neighbors may be points that are within the band, or outside of it.
+
+            Wxfy, neigh_xfy = kd_Tree(Nxfy, 2, len(Nxfy), 7, xfy)
+            Wxby, neigh_xby = kd_Tree(Nxby, 2, len(Nxby), 7, xby)
+            Wxyf, neigh_xyf = kd_Tree(Nxyf, 2, len(Nxyf), 7, xyf)
+            Wxyff, neigh_xyff = kd_Tree(Nxyff, 2, len(Nxyff), 7, xyff)
+            # Wxy, neigh_xy = kd_Tree(Nxy, 2, len(Nxy), 7, xy)
+
+            weights.append([Wxfy, Wxby, Wxyf, Wxyff]) # We add the weights of the neighbors to the weights list.
+            neighbors.append([neigh_xfy, neigh_xby, neigh_xyf, neigh_xyff, xy]) # We add the neighbors to the neighbors list.
+        
+            # In the code above, we need 4 points: two points on the x-axis for central differentiation and one 
+            # point on the y-axis for backward differentiation. We then use these points to find the sub point cloud around them. 
+            # Using these sub point clouds we can then calculate the weights and neighbors for each point. 
+            # The weights and neighbors are calculated using the kdTree function(sid's subroutine). 
+            # We then store them in the weights and neighbors list, which will be used later. 
+            # For now each entry in weight and neighbor corresponds to information about 4 points: xfy, xby, xyf, xy. 
+            # Since we specified the neighbors as 7, we will have 7 dimensional vector for each of theses points, 
+            # making it a total of 4 times 7 = 28 entries per point (x,y).
+    return bands, belts, weights, neighbors
+
+
+
 # ---------------------------------------------------------------------------------------------------------------------- #
 # The PDES class allows you to write
 # the equations symbolically in Sympy. This allows users to quickly write their equations in the most natural way possible.
 # The Sympy equations are converted to TensorFlow expressions in the back-end and can also be printed to ensure correct
 # implementation.
+# ---------------------------------------------------------------------------------------------------------------------- #
 
 class Poisson_2D(PDES):
     name = 'Poisson_2D'
@@ -366,172 +523,6 @@ class PotentialInference(InferenceDomain):
         self.add(interior, name="Inference")
 
 
-x_interior = list(tf.make_ndarray(domain_invar['interior']['x'])) + \
-list(tf.make_ndarray(domain_invar['RightWall']['x'])) # x coordinate of interior points
-y_interior = list(tf.make_ndarray(domain_invar['interior']['y'])) + \
-list(tf.make_ndarray(domain_invar['RightWall']['y'])) # y coordinate of interior points
-
-x_wkeobs_above = domain_invar['obstacleLineAbove']['x'] + \
-domain_invar['wakeLine1_Above']['x'] + \
-    domain_invar['wakeLine2_Above']['x'] + \
-        domain_invar['wakeLine3_Above']['x'] # x coordinate of obstacle and wake points above
-y_wkeobs_above = domain_invar['obstacleLineAbove']['y'] + \
-domain_invar['wakeLine1_Above']['y'] + \
-    domain_invar['wakeLine2_Above']['y'] + \
-        domain_invar['wakeLine3_Above']['y'] # y coordinate of obstacle and wake points above
-
-x_wkeobs_below = domain_invar['obstacleLineBelow']['x'] + \
-domain_invar['wakeLine1_Below']['x'] + \
-    domain_invar['wakeLine2_Below']['x'] + \
-        domain_invar['wakeLine3_Below']['x'] # x coordinate of obstacle and wake points below
-y_wkeobs_below = domain_invar['obstacleLineBelow']['y'] + \
-domain_invar['wakeLine1_Below']['y'] + \
-    domain_invar['wakeLine2_Below']['y'] + \
-        domain_invar['wakeLine3_Below']['y'] # y coordinate of obstacle and wake points below
-
-# wkeobs_above = np.asarray([x_wkeobs_above, y_wkeobs_above]).T
-# wkeobs_below = np.asarray([x_wkeobs_below, y_wkeobs_below]).T
-
-# zip() by default stores a list of tuples. We need to convert the tuples into lists.
-wkeobs_above = list(zip(x_wkeobs_above, y_wkeobs_above))
-wkeobs_above = [list(t) for t in wkeobs_above] # convert from tuple to list
-wkeobs_below = list(zip(x_wkeobs_below, y_wkeobs_below))
-wkeobs_below = [list(t) for t in wkeobs_below] # convert from tuple to list
-interior = list(zip(x_interior, y_interior))
-interior = [list(t) for t in interior] # convert from tuple to list
-
-################################################################################################################
-
-# EXPLANATION FOR CODE ABOVE:
-# To form the band we need around the obstacle and wake lines, we need to know 
-# the x and y values of all the interior points, obstacle lines, wake lines and right wall in the event of cut off. 
-# The code above does this by adding the x and y values of all the relevant regions.
-
-# We now move on to filtering our points to match our criteria for selection of points around the obstacle and wake lines. 
-# A diagram below shows us the band of points around the obstacle and wake lines.
-
-# +-------------------+
-# |                   |
-# |                   |
-# |     +-------------+
-# |     |/////////////|
-# |     |---==========|
-# |     |\\\\\\\\\\\\\|
-# |     +-------------+
-# |                   |
-# |                   |
-# +-------------------+
-
-# Diagram: Band around obstacle and wake lines
-
-# We need to filter the interior points to only select those that lie within the square. 
-# We do this by taking the x and y values of the interior points
-# and comparing them to the x and y values of the square. 
-# If the x and y values are within the square, we add them to the interior points.
-
-################################################################################################################
-
-band = [] # This is the band of points around the obstacle and wake lines.
-belt = [] # This is the belt of points around the obstacle and wake lines.
-band_range_x = [-obstacle_length, width/2] # This is the range of x values of the band.
-band_range_y_belt = [-0.015, 0.015] # This is the range of y values of the belt.
-band_range_y = [-0.06, 0.06] # This is the range of y values of the band.
-
-# The code below filters the interior points to only select those that lie within the range of the band.
-for i in range(len(x_interior)):
-    if band_range_x[0] <= x_interior[i] <= band_range_x[1] and \
-        band_range_y[0] <= y_interior[i] <= band_range_y[1]:
-        band.append([x_interior[i], y_interior[i]])
-
-# The code below filters the interior points to only select those that lie within the range of the belt.
-for i in range(len(band)):
-    if band_range_y_belt[0] <= band[i][1] <= band_range_y_belt[1] and \
-        band_range_x[0] <= band[i][0] <= band_range_x[1]:
-        belt.append([band[i][0], band[i][1]])
-
-# While band is used for getting the sub point cloud, the belt is used for getting three hypothetical points.
-
-# We now have all the points within the band. We need to divide the band into above and below y = 0. 
-# We do this by creating two lists, one for above y = 0 and one for below y = 0.
-
-band_above = [] # This is the band of points above y = 0.
-band_below = [] # This is the band of points below y = 0.
-
-belt_above = [] # This is the belt of points above y = 0.
-belt_below = [] # This is the belt of points below y = 0.
-
-for i in range(len(band)):
-    if band[i][1] > 0:
-        band_above.append(band[i]) # If the y value of the point is above y = 0, we add it to the band above.
-    elif band[i][1] < 0:
-        band_below.append(band[i]) # If the y value of the point is below y = 0, we add it to the band below.
-
-for i in range(len(belt)):
-    if belt[i][1] > 0:
-        belt_above.append(belt[i]) # If the y value of the point is above y = 0, we add it to the belt above.
-    elif belt[i][1] < 0:
-        belt_below.append(belt[i]) # If the y value of the point is below y = 0, we add it to the belt below.
-
-# We dont concern ourselves with the points that are exactly on the y = 0 line as we are going to add obstacle and wake points 
-# separately in the code below.
-
-band_above = band_above + wkeobs_above # We add the obstacle and wake points to the band above.
-band_below = band_below + wkeobs_below # We add the obstacle and wake points to the band below.
-
-belt_above = belt_above + wkeobs_above # We add the obstacle and wake points to the belt above.
-belt_below = belt_below + wkeobs_below # We add the obstacle and wake points to the belt below.
-
-# Now that we have divided the band into above and below y = 0, we can now start our process of dividing 
-# the point cloud into smaller sub point clouds using my good friend sid's subroutine.
-
-band_total = band_above + band_below # We combine the band above and below into one list.
-belt_total = belt_above + belt_below # We combine the belt above and below into one list.
-bands = [band_above, band_below] # We create a list of the above and below band to iterate through them later.
-belts = [belt_above, belt_below] # We create a list of the above and below belt to iterate through them later.
-dx = 0.015*obstacle_length # This is the distance between the main point and the constructed points across the x axis.
-dy = 0.015*obstacle_length # This is the distance between the main point and the constructed point across the y axis.
-weights = [] # This is the list of weights of the neighbors used to interpolate the phi value of the constructed points.
-neighbors = [] # These are the neighbors of the constructed points n.
-
-for i in range(2):
-    for j in range(len(belt[i])):
-        xfy = [belt[i][j][0] + dx, belt[i][j][1]] # This is the x in front of the original point.
-        xby = [belt[i][j][0] - dx, belt[i][j][1]] # This is the x behind the original point.
-        xyf = [belt[i][j][0], belt[i][j][1] + (-1)**i*dy] # This is the y next of the original point.
-        xyff = [belt[i][j][0], belt[i][j][1] + (-1)**i*(2*dy)] # This is the y next next of the original point.
-        xy = [belt[i][j][0], belt[i][j][1]] # This is the original point.
-
-        Nxfy = get_sub_pc(xfy, bands[i], 0.3, (-1)**i*0.6) # This is the sub point cloud of the x in front of the original point.
-        Nxby = get_sub_pc(xby, bands[i], 0.3, (-1)**i*0.6) # This is the sub point cloud of the x behind the original point.
-        Nxy = get_sub_pc(xy, bands[i], 0.3, (-1)**i*0.6) # This is the sub point cloud of the original point.
-        Nxyf = Nxyff = Nxy # This is the sub point cloud of the y next of the original point, and is the same as Nxy.
-
-        # We now use sid's subroutine to get the neighbors and weights of the constructed points. 
-        # Sid's subroutine uses KD tree to find the neighbors and their corresponding weights for the constructed points.
-        # The weights are calculated using the inverse-square of the distance between the constructed point and the neighbors.
-        # The neighbors are for now taken as 7 points.
-        # The neighbors may be points that are within the band, or outside of it.
-
-        Wxfy, neigh_xfy = kd_Tree(Nxfy, 2, len(Nxfy), 7, xfy)
-        Wxby, neigh_xby = kd_Tree(Nxby, 2, len(Nxby), 7, xby)
-        Wxyf, neigh_xyf = kd_Tree(Nxyf, 2, len(Nxyf), 7, xyf)
-        Wxyff, neigh_xyff = kd_Tree(Nxyff, 2, len(Nxyff), 7, xyff)
-        # Wxy, neigh_xy = kd_Tree(Nxy, 2, len(Nxy), 7, xy)
-
-        weights.append([Wxfy, Wxby, Wxyf, Wxyff]) # We add the weights of the neighbors to the weights list.
-        neighbors.append([neigh_xfy, neigh_xby, neigh_xyf, neigh_xyff, xy]) # We add the neighbors to the neighbors list.
-    
-        # In the code above, we need 4 points: two points on the x-axis for central differentiation and one 
-        # point on the y-axis for backward differentiation. We then use these points to find the sub point cloud around them. 
-        # Using these sub point clouds we can then calculate the weights and neighbors for each point. 
-        # The weights and neighbors are calculated using the kdTree function(sid's subroutine). 
-        # We then store them in the weights and neighbors list, which will be used later. 
-        # For now each entry in weight and neighbor corresponds to information about 4 points: xfy, xby, xyf, xy. 
-        # Since we specified the neighbors as 7, we will have 7 dimensional vector for each of theses points, 
-        # making it a total of 4 times 7 = 28 entries per point (x,y).
-
-# ---------------------------------------------------------------------------------------------------------------------- #
-
 class PotentialSolver(Solver, PDES):
     train_domain = PotentialTrain
     inference_domain = PotentialInference
@@ -545,6 +536,16 @@ class PotentialSolver(Solver, PDES):
             name="flow_net", inputs=["x", "y", "alpha"], outputs=["u", "v", "phi"]
         )
         self.nets = [flow_net]
+
+        self.init_flag = 0
+        
+        self.bands = []        
+        
+        self.belts = []
+        
+        self.weights = []
+        
+        self.neighbors = []
 
     # The following function allows you to interpolate your vector points using
     # the interpolation function as weighted average of the vector points using the weight array
@@ -568,10 +569,23 @@ class PotentialSolver(Solver, PDES):
         elif(flag_val==0 and phi_x_denom!=0): # If the interpolation function does not follow the condition when distance == 0
             return(phi_x_numer/phi_x_denom)
 
+
     # The following function generates a sub point cloud using the given point cloud 
     # and the given bounding box around the given point coordinate.
 
+
+    # ---------------------------------------------------------------------------------------------------------------------- #
+
     def custom_loss(self, domain_invar, pred_domain_outvar, true_domain_outvar, step):
+
+        if self.init_flag == 0:
+            self.bands, self.belts, self.weights, self.neighbors = init_domain(domain_invar, pred_domain_outvar, true_domain_outvar, step)
+            self.init_flag = 1
+        bands = self.bands
+        belts = self.belts
+        weights = self.weights
+        neighbors = self.neighbors
+        
         u_band = [] # This is the list that stores the u values within the band initially. 
         v_band = [] # This is the list that stores the v values within the band initially.
         grad_sq_phi = [] # This is the list that stores the gradient of the squared phi values.

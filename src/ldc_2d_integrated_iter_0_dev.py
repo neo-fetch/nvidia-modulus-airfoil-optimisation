@@ -29,7 +29,7 @@ def get_sub_pc(point, band, x_range, y_range):
             sub_pc.append(band[i]) # If the point lies in the given bounding box, then add it to the sub point cloud
     return sub_pc
 
-
+@tf.function
 def init_domain(domain_invar, pred_domain_outvar, true_domain_outvar, step):
     
     x_interior = tf.concat([domain_invar['interior']['x'], domain_invar['RightWall']['x']], axis=0) # Concatenate the interior and the right wall for x
@@ -45,12 +45,12 @@ def init_domain(domain_invar, pred_domain_outvar, true_domain_outvar, step):
     # wkeobs_below = np.asarray([x_wkeobs_below, y_wkeobs_below]).T
 
     # zip() by default stores a list of tuples. We need to convert the tuples into lists.
-    wkeobs_above = list(zip(x_wkeobs_above, y_wkeobs_above))
-    wkeobs_above = [list(t) for t in wkeobs_above] # convert from tuple to list
-    wkeobs_below = list(zip(x_wkeobs_below, y_wkeobs_below))
-    wkeobs_below = [list(t) for t in wkeobs_below] # convert from tuple to list
-    interior = list(zip(x_interior, y_interior))
-    interior = [list(t) for t in interior] # convert from tuple to list
+    wkeobs_above = tf.stack([x_wkeobs_above, y_wkeobs_above])
+    
+    wkeobs_below = tf.stack([x_wkeobs_below, y_wkeobs_below])
+    
+    interior = tf.stack([x_interior, y_interior]) # Stack the interior points
+
 
     ################################################################################################################
 
@@ -90,7 +90,12 @@ def init_domain(domain_invar, pred_domain_outvar, true_domain_outvar, step):
     band_range_y = [-0.06, 0.06] # This is the range of y values of the band.
 
     # The code below filters the interior points to only select those that lie within the range of the band.
-    for i in range(len(x_interior)):
+    # We do this by taking the x and y values of the interior points
+    # and comparing them to the x and y values of the band.
+    # If the x and y values are within the band, we add them to the band.
+    # We cannot iterate over the tensor directly, so we need to convert it to a list.
+    x_interior = x_interior.numpy().tolist()
+    for i in range(x_interior.shape[0]):
         if band_range_x[0] <= x_interior[i] <= band_range_x[1] and \
             band_range_y[0] <= y_interior[i] <= band_range_y[1]:
             band.append([x_interior[i], y_interior[i]])

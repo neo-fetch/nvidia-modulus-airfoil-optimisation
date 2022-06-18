@@ -13,7 +13,7 @@ import numpy as np
 import sys
 
 
-# k = int(input("Enter your 'k': "))
+k = int(input("Enter your 'k': "))
 
 class Sin2kx(PDES):
     name = 'Sin2kx'
@@ -27,14 +27,17 @@ class Sin2kx(PDES):
         f = Function('f')(*input_variables)
         
         self.equations = Variables()
-        self.equations['Sin2kx'] = -f + sin(2*x)/2 + sin(4*x)/4 + sin(6*x)/6 + sin(8*x)/8 + sin(10*x)/10
+        # self.equations['Sin2kx'] = -f + sin(2*x)/2 + sin(4*x)/4 + sin(6*x)/6 + sin(8*x)/8 + sin(10*x)/10
         # self.equations['Sin2kx'] = -f.diff(x, 1) + cos(2*x) + cos(4*x) + cos(6*x) + cos(8*x) + cos(10*x)
         # self.equations['Sin2kx'] = f.diff(x, 2) + 2*sin(2*x) + 4*sin(4*x) + 6*sin(6*x) + 8*sin(8*x) + 10*sin(10*x)
 
         # self.equations['Sin2kx'] = f.diff(x, 3) + 2*2*cos(2*x) + 4*4*cos(4*x) + 6*6*cos(6*x) + 8*8*cos(8*x) + 10*10*cos(10*x)
-        self.equations['Sin2kx'] = -f.diff(x, 4) + 2*2*2*sin(2*x) + 4*4*4*sin(4*x) + 6*6*6*sin(6*x) + 8*8*8*sin(8*x) + 10*10*10*sin(10*x)
+        # self.equations['Sin2kx'] = -f.diff(x, 4) + 2*2*2*sin(2*x) + 4*4*4*sin(4*x) + 6*6*6*sin(6*x) + 8*8*8*sin(8*x) + 10*10*10*sin(10*x)
         # self.equations['diff2_f'] = f.diff(x, 2) + 2*sin(2*x) + 4*sin(4*x) + 6*sin(6*x) + 8*sin(8*x) + 10*sin(10*x)
-        # self.equations['diff_f'] = f.diff(x, 1) 
+        # self.equations['diff_f'] = f.diff(x, 1)
+        self.equations['Sin2kx'] = f.diff(x, 2) - sin(k*x)
+        self.equations['Sin2kx'] = f + sin(k*x)/k*k
+
 # ---------------------------------------------------------------------------------------------------------------------- #
 
 # params for domain

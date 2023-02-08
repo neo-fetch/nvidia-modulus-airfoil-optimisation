@@ -103,4 +103,4 @@ The convergence contour plots can be found in the `results` folder.
 - [Mayank Deshpande](https://www.github.com/neo-fetch)
 - [Siddharth Agarwal](https://www.linkedin.com/in/siddharthagarwal1089/)
 - [Yang Juntao](https://sg.linkedin.com/in/yang-juntao-b0734359)
-- [Neelappa](https://github.com/neelu065)
+- [Neelappa H](https://github.com/neelu065)

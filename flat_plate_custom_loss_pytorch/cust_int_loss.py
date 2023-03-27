@@ -1,13 +1,10 @@
 import os
 from pathos.pools import ThreadPool as TPool
-from typing import List, Any
-
 import torch
 from modulus.hydra import ModulusConfig
-from modulus.loss import Loss
 from sklearn.neighbors import KDTree
 import numpy as np
-from modulus.loss import Loss, PointwiseLossNorm
+from modulus.loss import Loss
 # import warnings filter
 from warnings import simplefilter
 
@@ -34,32 +31,8 @@ def kd_tree(X, n, point):
             weigth_arr[i] = 1 / (dist[0][i] ** 2)
     return weigth_arr, neighbour_points, dist
 
-@torch.enable_grad()
-def phi_evaluation_neighbor(self, x_values, y_values):
 
-    # Random value for alpha is generated
-    temp_angle = np.pi * self.cfg.custom.free_stream_velocity / 180
-    alpha = torch.distributions.uniform.Uniform(- temp_angle, temp_angle).sample(
-        [self.cfg.custom.neigh_point_kd_tree, 1]).type(torch.float32)
-    alpha_xy = torch.distributions.uniform.Uniform(- temp_angle, temp_angle).sample([1]).type(
-        torch.float32)
-
-    # phi_xfy = self.nets.evaluate({'x': x_values[0], 'y': y_values[0], 'alpha': alpha})[
-    #     'phi']  # We evaluate the phi values of the neighbors of xfy using the neural network.
-    phi_xfy = self.nets.evaluate({'x': x_values[0].to(self.device), 'y': y_values[0].to(self.device), 'alpha': alpha.to(self.device)})[
-        'phi']  # We evaluate the phi values of the neighbors of xfy using the neural network.
-
-    phi_xby = self.nets.evaluate({'x': x_values[1].to(self.device), 'y': y_values[1].to(self.device), 'alpha': alpha.to(self.device)})[
-        'phi']  # We evaluate the phi values of the neighbors of xby using the neural network.
-    phi_xyf = self.nets.evaluate({'x': x_values[2].to(self.device), 'y': y_values[2].to(self.device), 'alpha': alpha.to(self.device)})[
-        'phi']  # We evaluate the phi values of the neighbors of xyf using the neural network.
-    phi_xyff = self.nets.evaluate({'x': x_values[3].to(self.device), 'y': y_values[3].to(self.device), 'alpha': alpha.to(self.device)})[
-        'phi']  # We evaluate the phi values of the neighbors of xyff using the neural network
-    xy_pred = self.nets.evaluate({'x': x_values[4].to(self.device), 'y': y_values[4].to(self.device), 'alpha': alpha_xy.to(self.device)})
-
-    return phi_xfy, phi_xby, phi_xyf, phi_xyff, xy_pred
-
-
+@torch.no_grad()
 def get_sub_pc(point, band, x_range, y_range, cfg):
     width = cfg.custom.unscaled_domain_height * cfg.custom.obstacle_length
     # Set the x range of the sub point cloud
@@ -77,6 +50,7 @@ def get_sub_pc(point, band, x_range, y_range, cfg):
     return sub_pc
 
 
+@torch.no_grad()
 def phi_interpolation(phi, n, weigth_arr, dist):
     interpolated_phi_x = 0  # Initialize the interpolated value of phi_x
     phi_x_numer = 0  # Initialize the numerator of the interpolated value of phi_x
@@ -99,6 +73,7 @@ def phi_interpolation(phi, n, weigth_arr, dist):
         return phi_x_numer / phi_x_denom
 
 
+@torch.no_grad()
 def pull_coordinates(domain_invar):
     """
     This function pulls the coordinates from the geometry curves.
@@ -113,6 +88,8 @@ def pull_coordinates(domain_invar):
     total_domain = {}
     for key in domain_invar.constraints.keys():
         total_domain[key] = {}
+        # temp = {'x': domain_invar.constraints[key].dataset.invar_fn()['x'],
+        #         'y': domain_invar.constraints[key].dataset.invar_fn()['y']}
         temp = {'x': domain_invar.constraints[key].dataset.invar['x'],
                 'y': domain_invar.constraints[key].dataset.invar['y']}
         total_domain[key].update(temp)
@@ -120,6 +97,7 @@ def pull_coordinates(domain_invar):
     return total_domain
 
 
+@torch.no_grad()
 def prepare_coordinates(total_domain, interior_invar):
     ################################################################################################################
 
@@ -174,12 +152,13 @@ def prepare_coordinates(total_domain, interior_invar):
     return interior, wkeobs_above, wkeobs_below
 
 
+@torch.no_grad()
 def init_domain(interior_invar, domain_invar, cfg=ModulusConfig):
     total_domain = pull_coordinates(domain_invar)
 
     interior, wkeobs_above, wkeobs_below = prepare_coordinates(total_domain, interior_invar)
 
-    del total_domain
+    del total_domain, interior_invar
 
     width = cfg.custom.unscaled_domain_height * cfg.custom.obstacle_length
     band_range_x = [-cfg.custom.obstacle_length, width / 2]
@@ -240,6 +219,7 @@ def init_domain(interior_invar, domain_invar, cfg=ModulusConfig):
 
     # Following loop manages the above and below vector of belts independently. So, it's hardcoded.
     for i in range(2):
+        @torch.no_grad()
         def neigh_weigh_dist(j):
             xy = [belts[i][j][0], belts[i][j][1]]  # This is the original point.
             xfy = [xy[0] + dx, xy[1]]  # x in front of the original point.
@@ -288,17 +268,19 @@ def init_domain(interior_invar, domain_invar, cfg=ModulusConfig):
     return weights, neighbors, distance, belt_total
 
 
-def pull_sort_wrt_x(tensor, ind):
+@torch.no_grad()
+def pull_sort_wrt_x(tensor_variable, ind):
     # since belt_interior_points are jumbled, it's not possible to multiply the corr lambda values to belt points.
     # So there is a need to aligned points with some axis. let's sort belt_interior_pts wrt x-axis in increasing
     # order and take sorted index and align all the belt residual values.
 
-    temp = tensor[ind]
+    temp = tensor_variable[ind]
     # Sorting about x-axis of belt_interior_points
-    _, idx = torch.sort(temp[:, 0])
-    return idx
+    _, indx = torch.sort(temp[:, 0])
+    return indx
 
 
+@torch.no_grad()
 def get_index(master, child):
     # https://stackoverflow.com/questions/62588779/pytorch-differences-between-two-tensors
     return master.unsqueeze(1).eq(child).all(-1).any(-1)
@@ -320,8 +302,12 @@ class PotentialLoss(Loss):
     Returns: loss (within the band and outside the band).
     """
 
-    def __init__(self, domain, cfg, arch, alpha_range):
+    def __init__(self, domain, cfg, arch, alpha_same):
         super().__init__()
+
+        # device agnostic code
+        self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
         self.belt_total = None
         self.distance = None
         self.neighbors = None
@@ -330,20 +316,39 @@ class PotentialLoss(Loss):
         self.domain = domain
         self.cfg = cfg
         self.nets = arch
-        self.alpha_range = alpha_range
+        self.alpha_same = alpha_same   # check this position
 
-        # device agnostic code
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    @torch.no_grad()
+    def phi_evaluation_neighbor(self, x_values, y_values, xy):
+        # Random value for alpha is generated
+        # temp_angle = np.pi * self.cfg.custom.AoA / 180
+        #
+        # alpha = torch.full((self.cfg.custom.neigh_point_kd_tree, 1),
+        #                    np.random.uniform(- temp_angle, temp_angle)).type(torch.float32).to(self.device)
+        # alpha = torch.full((self.cfg.custom.neigh_point_kd_tree, 1), self.domain.constraints['interior'].dataset.invar['alpha'][0]).type(torch.float32).to(self.device)
+        alpha = torch.tensor(np.full((self.cfg.custom.neigh_point_kd_tree, 1), self.alpha_same), dtype=torch.float32).to(self.device)
+
+        phi_xfy = self.nets.evaluate(
+            {'x': x_values[:, [0]], 'y': y_values[:, [0]], 'alpha': alpha})[
+            'phi']  # We evaluate the phi values of the neighbors of xfy using the neural network.
+
+        phi_xby = self.nets.evaluate(
+            {'x': x_values[:, [1]], 'y': y_values[:, [1]], 'alpha': alpha})[
+            'phi']  # We evaluate the phi values of the neighbors of xby using the neural network.
+        phi_xyf = self.nets.evaluate(
+            {'x': x_values[:, [2]], 'y': y_values[:, [2]], 'alpha': alpha})[
+            'phi']  # We evaluate the phi values of the neighbors of xyf using the neural network.
+        phi_xyff = self.nets.evaluate(
+            {'x': x_values[:, [3]], 'y': y_values[:, [3]], 'alpha': alpha})[
+            'phi']  # We evaluate the phi values of the neighbors of xyff using the neural network
+        xy_pred = self.nets.evaluate(
+            {'x': xy[0], 'y': xy[1], 'alpha': alpha[0]})
+
+        return phi_xfy, phi_xby, phi_xyf, phi_xyff, xy_pred
 
     def in_belt_residuals(self):
-
-        @torch.enable_grad()
+        @torch.no_grad()
         def residuals_calc(i):
-            # # xfy
-            # x_xfy = torch.stack(self.neighbors[i][0])[:, [0]].cuda().type(torch.float32)
-            # # In [:,[0]], [0] is used to obtain proper shape.
-            # y_xfy = torch.stack(self.neighbors[i][0])[:, [1]].cuda().type(torch.float32)
-
             # xfy
             x_xfy = torch.stack(self.neighbors[i][0])[:, [0]].type(torch.float32)
 
@@ -367,10 +372,11 @@ class PotentialLoss(Loss):
                 torch.float32)  # The original point.
 
             # --------------- Phi value evaluation ---------------- #
-            phi_xfy, phi_xby, phi_xyf, phi_xyff, xy_pred = phi_evaluation_neighbor(self,
-                                                                                   [x_xfy, x_xby, x_xyf, x_xyff, xy[0]],
-                                                                                   [y_xfy, y_xby, y_xyf, y_xyff, xy[1]]
-                                                                                   )
+            phi_xfy, phi_xby, phi_xyf, phi_xyff, xy_pred = self.phi_evaluation_neighbor(
+                torch.hstack([x_xfy, x_xby, x_xyf, x_xyff]).to(self.device),
+                torch.hstack([y_xfy, y_xby, y_xyf, y_xyff]).to(self.device),
+                xy.to(self.device)
+            )
 
             # Assigning prediction values to corr variables
             u_pred, v_pred, phi_xy = xy_pred['u'], xy_pred['v'], xy_pred['phi']
@@ -378,7 +384,7 @@ class PotentialLoss(Loss):
             del x_xfy, y_xfy, x_xby, y_xby, x_xyf, y_xyf, x_xyff, y_xyff, xy_pred
 
             # --------------- Phi value interpolation -------------- #
-            phi_xfy = phi_interpolation(phi_xfy, phi_xby.shape[0], self.weights[i][0], self.distance[i][
+            phi_xfy = phi_interpolation(phi_xfy, phi_xfy.shape[0], self.weights[i][0], self.distance[i][
                 0])  # We interpolate the phi values of the neighbors of xfy using the weighted average.
             phi_xby = phi_interpolation(phi_xby, phi_xby.shape[0], self.weights[i][1], self.distance[i][
                 1])  # We interpolate the phi values of the neighbors of xby using the weighted average.
@@ -413,14 +419,15 @@ class PotentialLoss(Loss):
     @staticmethod
     def interior_total_losses(lambda_weigh_total, pred_values, true_outvar, invar, step):
         losses = {}
-        for key, value in pred_values.items():
-            _loss = (lambda_weigh_total * torch.abs(pred_values[key] - true_outvar[key]).pow(2)) * invar["area"]
-            losses[key] = _loss.sum()
 
-        print(rf"At step = {step}, internal_loss = {losses}")
-        # print(rf"internal_loss = {losses}")
+        for key, value in pred_values.items():
+            _l = lambda_weigh_total * (torch.abs(pred_values[key] - true_outvar[key]).pow(2)) * invar["area"]
+            losses[key] = _l.sum()
+
+        # print(rf"At step = {step}, internal_loss = {losses}")
         return losses
 
+    @torch.no_grad()
     def forward(self, invar, pre_outvar, true_outvar, lambda_weigh, step: int):
 
         if self.init_flag == 0:
@@ -440,12 +447,14 @@ class PotentialLoss(Loss):
         # points (excluding the wake and flat plate points) using invar variable.
 
         # interior points excluding wakes and flat plate points.
-        total_interior = torch.hstack([invar['x'], invar['y']]).cpu()
+        total_interior = torch.hstack([invar['x'], invar['y']])
+        self.belt_total = self.belt_total.to(self.device)
 
         # index of belt points present in interior
         index_belt_interior = get_index(self.belt_total, total_interior)
 
         # Segregating the residual values of interior points (excluding wakes and flat plate)
+
         residual_poisson_2d_belt = grad_sq_phi_within_belt[index_belt_interior]
         residual_u_belt = res_u_belt[index_belt_interior]
         residual_v_belt = res_v_belt[index_belt_interior]
@@ -494,27 +503,7 @@ class PotentialLoss(Loss):
                        'residual_u': torch.concat([res_u_out_belt, res_u_belt_sort]),
                        'residual_v': torch.concat([res_v_out_belt, res_v_belt_sort])
                        }
-
+        # print(rf"alpha_interior: {invar['alpha'].unique()}")
+        # print(rf"alpha_leftwall: {self.domain.constraints['LeftWall'].dataset.invar['alpha'][0]}")
+        # print(rf"alpha_same: {self.alpha_same}")
         return self.interior_total_losses(lambda_weigh_total, pred_values, true_outvar, invar, step)
-
-    # rename forward_all to forward.
-    # def forward(self, invar, pre_outvar, true_outvar, lambda_weigh, step: int):
-    #     abc = invar['Poisson_2D'].squeeze().type(torch.float32)
-    #     # self.flag = 0
-    #     # if self.init_flag == 0:
-    #     #     self.weights, self.neighbors, self.distance, self.belt_total = init_domain(invar, self.domain, self.cfg)
-    #     #     self.init_flag = 1
-    #     x_values = torch.tensor([[0.0510],
-    #                             [0.0606],
-    #                             [0.0547],
-    #                             [0.0391],
-    #                             [0.0630],
-    #                             [0.0419],
-    #                             [0.0577]], device='cuda')
-    #
-    #     def xay(x_val):
-    #         a = self.nets.evaluate({'x': x_val, 'y': x_val, 'alpha': x_val})
-    #         return a
-    #     # xyz = torch.cuda.make_graphed_callables(xay, (x_values,))
-    #     # return {'abc': xyz.squeeze()[0]}
-    #     return {'abc': abc[0]}

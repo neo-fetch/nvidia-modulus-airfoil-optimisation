@@ -1,56 +1,67 @@
 defaults :
   - modulus_default
-  - arch:
-      - fully_connected
-#      - layer_size: 20
-#      - nr_layers: 6
-  - scheduler: tf_exponential_lr
+  - arch: fully_connected  #fourier_net
   - optimizer: adam
+  - scheduler: tf_exponential_lr
   - loss: sum
   - _self_
 
 jit: False
-cuda_graphs: True
-cuda_graph_warmup: 1
-#debug: True
 scheduler:
-  decay_rate: 0.95
-  decay_steps: 2000
+  decay_rate: 0.5 #0.95  #0.5
+  decay_steps: 1000
 
+loss:
+##    weights: {'u':1e-2, 'v':1e-2, 'residual_obstacle_above':1e2, 'residual_u': 1e-3, 'residual_obstacle_below':1e2, 'Poisson_2D':1e-6, 'residual_v':1e-3}
+    weights: {'u':1, 'v':1, 'residual_u': 1e-1, 'Poisson_2D':1e-2, 'residual_v':1}
 
-#scheduler:
-#  initial_learning_rate: 0.02
-#  gamma: 0.25
-#  step: 1000
+arch:
+    fully_connected:
+        layer_size: 512
+        nr_layers: 2
 
-#  exponential_lr: 0.01
-#  decay_rate: 0.95
-#  decay_steps: 1000
+#arch:
+#  fourier_net:
+#    layer_size: 512
+#    nr_layers: 6
+
+cuda_graphs: False
+debug: False
+summary_histograms: True
+
+optimizer:
+  lr: 5e-3  #0.001
 
 training:
-  rec_validation_freq: 1000
-  rec_inference_freq: 2000
-  rec_monitor_freq: 1000
-  rec_constraint_freq: 2000
-  max_steps : 10000
+  rec_validation_freq : 50
+  rec_inference_freq: 50
+  rec_monitor_freq: 50
+  rec_constraint_freq: 50
+  max_steps : 5000
+  amp: True
+  amp_dtype: float32
+  save_network_freq: 50
+  print_stats_freq: 2
+  summary_freq: 2
 
 batch_size:
-  TopWall: 7200
-  BottomWall: 7200
-  LeftWall: 7200
-  RightWall: 7200
-  Interior: 7200 #43200
-  wake1_above: 1200
-  wake2_above: 1200
-  wake3_above: 1200
-  wake1_below: 1200
-  wake2_below: 1200
-  wake3_below: 1200
-  obstacle_above: 1200  # This value used for calculation of points in other domains (Top, Left, ...).
-  obstacle_below: 1200
-#  Inference_int_pts: 10000
+  TopWall: 600
+  BottomWall: 600
+  LeftWall: 600
+  RightWall: 600
+  Interior: 4320  #4320 #43200
+  wake1_above: 100
+  wake2_above: 100
+  wake3_above: 100
+  wake1_below: 100
+  wake2_below: 100
+  wake3_below: 100
+  obstacle_above: 100  # This value used for calculation of points in other domains (Top, Left, ...).
+  obstacle_below: 100
+  Inference_int_pts: 4320
 
 run_mode: 'train'
+#run_mode: 'eval'
 
 custom:
   obstacle_length: 0.10  # flat plate length
@@ -66,4 +77,5 @@ custom:
   band_range_y: [-0.06, 0.06]  # This is the range of y values of the band.
   x_range_sub_pc: 0.3  # sub point cloud x range
   y_range_sub_pc: 0.6    # sub-point cloud y range
-  free_stream_velocity: 10
+  free_stream_velocity: 10  # Mach = 0.3
+  AoA: 10  # Angle of attack
